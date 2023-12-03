@@ -1,0 +1,26 @@
+training:
+  learning_rate: 0.001
+  epochs: 10
+  batch_size: 32
+  patience: 25
+
+model:
+  type: "CNN"
+  layers: [64, 128, 256]
+  n_classes: 10
+
+dataset: 
+  name: "core50"
+  fraction_to_take: 0.2
+  validation_fraction: 0.2
+
+scenario:
+  type: "nc"
+  mini: True
+  object_lvl: False
+
+
+wandb:
+  use_wandb: True
+  project_name: "Avalanche-CL-Experiment"
+  entity: "myusername"
