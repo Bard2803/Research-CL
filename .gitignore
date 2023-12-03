@@ -93,3 +93,4 @@ venv.bak/
 
 # Others
 *.sav
+wandb/

@@ -11,8 +11,3 @@ class Config:
 
     def get(self, key, default=None):
         return self.data.get(key, default)
-
-# Usage
-config = Config('config.yaml')
-learning_rate = config.get('training').get('learning_rate')
-print(f"Learning Rate: {learning_rate}")

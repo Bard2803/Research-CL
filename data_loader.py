@@ -13,7 +13,8 @@ class DataLoader:
     def __init__(self, config):
         self.config = config
         self.logger = logging.getLogger(__name__)
-
+        self.dataset = None
+        self.prepare_dataset()
 
     def prepare_core50(self):
         val_fraction = self.config.get("dataset").get("validation_fraction")
@@ -33,23 +34,30 @@ class DataLoader:
             raise NameError("Scenario name unknown")
         return benchmark_with_validation_stream(core50, custom_split_strategy=f)
 
-
     def prepare_dataset(self):
-        if self.config.get("dataset").get("name") == "core50":
+        dataset_name = self.config.get("dataset").get("name")
+        if dataset_name == "core50":
             self.dataset = self.prepare_core50()
+        else:
+            # Handle other datasets or raise an error
+            raise ValueError(f"Dataset '{dataset_name}' not supported")
+        
+        if self.dataset:
+            self.logger.info(f'--- Task labels: {self.dataset.task_labels}')
+        else:
+            self.logger.warning('Dataset is not properly initialized')
 
-        # the task label of each train_experience.
-        self.logger.info(f'--- Task labels: {self.dataset.task_labels}')
+    def get_train_stream(self):
+        if self.dataset:
+            return self.dataset.train_stream
+        raise RuntimeError('Dataset is not initialized')
 
+    def get_val_stream(self):
+        if self.dataset:
+            return self.dataset.valid_stream
+        raise RuntimeError('Dataset is not initialized')
 
-    def get_train_set(self):
-        # Return DataLoader for training
-        return self.dataset.train_stream
-    
-    def get_val_set(self):
-        # Return DataLoader for training
-        return self.dataset.valid_stream
-
-    def get_test_set(self):
-        # Return DataLoader for testing
-        return self.dataset.test_stream
+    def get_test_stream(self):
+        if self.dataset:
+            return self.dataset.test_stream
+        raise RuntimeError('Dataset is not initialized')
