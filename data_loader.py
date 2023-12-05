@@ -11,7 +11,7 @@ def transform():
 
 class DataLoader:
     def __init__(self, config):
-        self.config = config
+        self.config = config 
         self.logger = logging.getLogger(__name__)
         self.dataset = None
         self.prepare_dataset()
@@ -20,9 +20,8 @@ class DataLoader:
         val_fraction = self.config.get("dataset").get("validation_fraction")
         scenario = self.config.get("scenario").get("type")
         if scenario == "ni":
-            core50_train = CORe50(train=True, scenario="ni", mini=True, object_lvl=True)
-            core50_test = CORe50(train=False, scenario="ni", mini=True, object_lvl=True)
-            f = lambda exp: random_validation_split_strategy(val_fraction, exp)
+            core50 = CORe50(scenario="ni", mini=True, object_lvl=True)
+            f = lambda exp: random_validation_split_strategy(val_fraction, False, exp)
         elif scenario == "nc":
             # Load the CORe50 dataset
             core50_train = CORe50Dataset(train=True, mini=True)
@@ -32,7 +31,9 @@ class DataLoader:
             f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
         else:
             raise NameError("Scenario name unknown")
-        return benchmark_with_validation_stream(core50, custom_split_strategy=f)
+        
+        core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
+        return core50
 
     def prepare_dataset(self):
         dataset_name = self.config.get("dataset").get("name")

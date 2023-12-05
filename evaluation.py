@@ -11,12 +11,15 @@ from datetime import datetime
 class Evaluation():
     def __init__(self, config):
         self.config = config
-        loggers = []
-        project_name = "CL-Research"
-        group_name = str(datetime.now())
-        loggers.append(WandBLogger(project_name=project_name, run_name="Naive", params={"reinit": True, "group": group_name}))
-        loggers.append(InteractiveLogger())
 
+        
+    def create_evaluator(self, run_name):
+        loggers = []
+        project_name = self.config.get("wandb").get("project_name")
+        group_name = str(datetime.now())
+        loggers.append(WandBLogger(project_name=project_name, run_name=run_name, \
+                                   params={"reinit": True, "group": group_name}, config=self.config))
+        loggers.append(InteractiveLogger())
         self.eval_plugin = EvaluationPlugin(
         loss_metrics(epoch=True, stream=True),
         accuracy_metrics(epoch=True, stream=True),
@@ -29,6 +32,7 @@ class Evaluation():
         forgetting_metrics(stream=True),
         loggers=loggers,
         strict_checks=False)
+
 
     def get_eval_plugin(self):
         return self.eval_plugin
