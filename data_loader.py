@@ -2,7 +2,6 @@ from avalanche.benchmarks.generators import benchmark_with_validation_stream, cl
 from avalanche.benchmarks.classic import CORe50
 from avalanche.benchmarks.datasets import CORe50Dataset
 from torchvision import transforms
-import logging 
 
 def transform():
     return transforms.Compose([
@@ -10,24 +9,24 @@ def transform():
     ])
 
 class DataLoader:
-    def __init__(self, config):
+    def __init__(self, config, dataset_name, scenario):
         self.config = config 
-        self.logger = logging.getLogger(__name__)
-        self.dataset = None
-        self.prepare_dataset()
+        self.dataset = self.prepare_dataset(dataset_name, scenario)
 
-    def prepare_core50(self):
+    def prepare_core50(self, scenario):
         val_fraction = self.config.get("dataset").get("validation_fraction")
-        scenario = self.config.get("scenario").get("type")
+        mini = self.config.get("scenario").get("mini")
+        object_lvl = self.config.get("scenario").get("object_lvl")
         if scenario == "ni":
-            core50 = CORe50(scenario="ni", mini=True, object_lvl=True)
+            core50 = CORe50(scenario=scenario, mini=mini, object_lvl=object_lvl)
             f = lambda exp: random_validation_split_strategy(val_fraction, False, exp)
         elif scenario == "nc":
             # Load the CORe50 dataset
-            core50_train = CORe50Dataset(train=True, mini=True)
-            core50_test = CORe50Dataset(train=False, mini=True)
-            # Create different split
-            core50 = nc_benchmark(core50_train, core50_test, n_experiences=10, shuffle=False, task_labels=False, train_transform=transform(), eval_transform=transform())
+            # core50_train = CORe50Dataset(train=True, mini=mini, object_level=object_lvl)
+            # core50_test = CORe50Dataset(train=False, mini=mini, object_level=object_lvl)
+            # # Create different split
+            # core50 = nc_benchmark(core50_train, core50_test, n_experiences=10, shuffle=False, task_labels=False, train_transform=transform(), eval_transform=transform())
+            core50 = CORe50(scenario=scenario, mini=mini, object_lvl=object_lvl)
             f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
         else:
             raise NameError("Scenario name unknown")
@@ -35,18 +34,12 @@ class DataLoader:
         core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
         return core50
 
-    def prepare_dataset(self):
-        dataset_name = self.config.get("dataset").get("name")
+    def prepare_dataset(self, dataset_name, scenario):
         if dataset_name == "core50":
-            self.dataset = self.prepare_core50()
+            return self.prepare_core50(scenario)
         else:
             # Handle other datasets or raise an error
             raise ValueError(f"Dataset '{dataset_name}' not supported")
-        
-        if self.dataset:
-            self.logger.info(f'--- Task labels: {self.dataset.task_labels}')
-        else:
-            self.logger.warning('Dataset is not properly initialized')
 
     def get_train_stream(self):
         if self.dataset:

@@ -9,16 +9,16 @@ from datetime import datetime
 
 
 class Evaluation():
-    def __init__(self, config):
+    def __init__(self, config, dataset, scenario):
         self.config = config
+        self.group_name = dataset + "_" + scenario + "_" + str(datetime.now()) 
 
         
     def create_evaluator(self, run_name):
         loggers = []
         project_name = self.config.get("wandb").get("project_name")
-        group_name = str(datetime.now())
         loggers.append(WandBLogger(project_name=project_name, run_name=run_name, \
-                                   params={"reinit": True, "group": group_name}, config=self.config))
+                                   params={"reinit": True, "group": self.group_name}, config=self.config))
         loggers.append(InteractiveLogger())
         self.eval_plugin = EvaluationPlugin(
         loss_metrics(epoch=True, stream=True),

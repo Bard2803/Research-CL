@@ -1,6 +1,6 @@
 import argparse
 from config import Config
-from data_loader import DataLoader
+
 from train import Trainer
 import os
 import logging
@@ -24,12 +24,7 @@ def main():
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
 
-
-    # Data loading
-    data_loader = DataLoader(config)
-
-    # Training setup
-    trainer = Trainer(data_loader, config)
+    trainer = Trainer(config)
 
     # Start training
     trainer.train()
