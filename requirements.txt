@@ -1,0 +1,4 @@
+torch==2.1.1
+wandb==0.16.0
+avalanche-lib==0.4.0
+

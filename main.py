@@ -3,20 +3,12 @@ from config import Config
 
 from train import Trainer
 import os
-import logging
-
-def setup_logging():
-    logging.basicConfig(filename='logs.log', level=logging.DEBUG, 
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Continual Learning with PyTorch')
     parser.add_argument('--config_file', type=str, default='config.yaml', help='Path to the configuration file')
     args = parser.parse_args()
-
-    setup_logging()
-    logging.info("Application started")
 
     main_path = os.path.dirname(os.path.abspath(__file__))
 

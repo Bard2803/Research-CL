@@ -1,11 +1,12 @@
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss
-from avalanche.models import SimpleCNN, MlpVAE 
+from avalanche.models import SimpleCNN, MlpVAE
 import torch
 from avalanche.training.supervised import Naive, Cumulative, EWC, GenerativeReplay, VAETraining, Replay, GEM, PNNStrategy, CWRStar
 from evaluation import Evaluation
 from avalanche.training.plugins import EarlyStoppingPlugin, GenerativeReplayPlugin
 from data_loader import DataLoader
+from models import SimpleCNNGrayScale
 
 
 
@@ -25,19 +26,25 @@ class Trainer():
         self.num_classes = config.get("model").get("num_classes")
 
 
-    def init_model(self):
-        self.model = SimpleCNN(num_classes=self.num_classes).to(self.device)
+    def init_model(self, dataset):
+        if dataset == "splitmnist":
+            self.model = SimpleCNNGrayScale(num_classes=self.num_classes).to(self.device)
+        else:
+            self.model = SimpleCNN(num_classes=self.num_classes).to(self.device)
         self.lr = self.config.get("training").get("learning_rate")
         self.optimizer = Adam(self.model.parameters(), lr=self.lr)
         self.criterion = CrossEntropyLoss()
         #Line 1453 in thesis_code.py
 
 
-    def Generator_Strategy(self, n_classes, lr, batchsize_train, batchsize_eval, epochs, nhid, ES_plugin):
-
-        # model:
-        # First argument is shape of input sample so 3 for RGB 32x32 for image resolution
-        generator = MlpVAE((3, 32, 32), nhid, n_classes, device=self.device)
+    def Generator_Strategy(self, n_classes, lr, batchsize_train, batchsize_eval, epochs, nhid, ES_plugin, dataset):
+        
+        if dataset == "splitmnist":
+            # First argument is shape of input sample so 1 for GrayScale 32x32 for image resolution
+            generator = MlpVAE((1, 32, 32), nhid, n_classes, device=self.device)
+        else:
+            # First argument is shape of input sample so 3 for RGB 32x32 for image resolution
+            generator = MlpVAE((3, 32, 32), nhid, n_classes, device=self.device)
         optimizer = Adam(generator.parameters(), lr=lr)
         # optimzer:
 
@@ -65,6 +72,18 @@ class Trainer():
 
         return train_stream, val_stream, test_stream
     
+    def generate_benchmarks_list(self):
+        datasets = self.config.get("dataset").get("name")
+        scenarios = self.config.get("scenario").get("type")
+        benchmarks_list = []
+        for dataset in datasets:
+            if dataset == "core50":
+                for scenario in scenarios:
+                    benchmarks_list.append((dataset, scenario))
+            else:
+                benchmarks_list.append((dataset, None))
+        return benchmarks_list
+        
 
     def train(self):
         num_runs = self.config.get("training").get("num_runs")
@@ -72,19 +91,18 @@ class Trainer():
         batchsize_eval = self.config.get("training").get("batch_size")
         epochs = self.config.get("training").get("epochs")
         fraction_to_take = self.config.get("dataset").get("fraction_to_take")
-        
         eval_every = self.config.get("training").get("eval_every")
         patience = self.config.get("training").get("patience")
         
         strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "Cumulative": Cumulative}
-        benchmarks = [("core50", "nc"), ("core50", "ni")]
+        benchmarks = self.generate_benchmarks_list()
         for dataset, scenario in benchmarks:
             train_stream, val_stream, test_stream = self.get_dataset(dataset, scenario)
             Evaluator = Evaluation(self.config, dataset, scenario)
             for j in range(num_runs):
                 for strategy_name, strategy in strategies.items():
                     # reinitilizate the model each run to reset its parameters and avoid carry over effect
-                    self.init_model()
+                    self.init_model(dataset)
                     Evaluator.create_evaluator(strategy_name)
                     eval_plugin = Evaluator.get_eval_plugin()
 
@@ -108,7 +126,7 @@ class Trainer():
 
                     elif strategy_name == "GR":
                         generator_strategy = self.Generator_Strategy(self.num_classes, self.lr, batchsize_train, batchsize_eval,\
-                        epochs, 2, EarlyStoppingPlugin(patience, "valid"))
+                        epochs, 2, EarlyStoppingPlugin(patience, "valid"), dataset)
                         
                         cl_strategy = strategy(
                         self.model, self.optimizer, self.criterion, device=self.device,

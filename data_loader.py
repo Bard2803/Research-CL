@@ -1,6 +1,5 @@
 from avalanche.benchmarks.generators import benchmark_with_validation_stream, class_balanced_split_strategy, random_validation_split_strategy, nc_benchmark
-from avalanche.benchmarks.classic import CORe50
-from avalanche.benchmarks.datasets import CORe50Dataset
+from avalanche.benchmarks.classic import CORe50, SplitMNIST, SplitCIFAR10
 from torchvision import transforms
 
 def transform():
@@ -33,10 +32,31 @@ class DataLoader:
         
         core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
         return core50
+    
+    def prepare_splitmnist(self):
+        val_fraction = self.config.get("dataset").get("validation_fraction")
+        num_experiences = self.config.get("scenario").get("num_experiences")
+        core50 = SplitMNIST(n_experiences=num_experiences, return_task_id=True)
+        f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
+        core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
+        return core50
+    
+    def prepare_splitcifar10(self):
+        val_fraction = self.config.get("dataset").get("validation_fraction")
+        num_experiences = self.config.get("scenario").get("num_experiences")
+        core50 = SplitCIFAR10(n_experiences=num_experiences, return_task_id=True)
+        f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
+        core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
+        return core50
+
 
     def prepare_dataset(self, dataset_name, scenario):
         if dataset_name == "core50":
             return self.prepare_core50(scenario)
+        if dataset_name == "splitmnist":
+            return self.prepare_splitmnist()
+        if dataset_name == "splitcifar10":
+            return self.prepare_splitcifar10()
         else:
             # Handle other datasets or raise an error
             raise ValueError(f"Dataset '{dataset_name}' not supported")

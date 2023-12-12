@@ -11,7 +11,10 @@ from datetime import datetime
 class Evaluation():
     def __init__(self, config, dataset, scenario):
         self.config = config
-        self.group_name = dataset + "_" + scenario + "_" + str(datetime.now()) 
+        if scenario:
+            self.group_name = dataset + "_" + scenario + "_" + str(datetime.now()) 
+        else:
+            self.group_name = dataset + "_" + str(datetime.now()) 
 
         
     def create_evaluator(self, run_name):

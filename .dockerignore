@@ -1,0 +1,9 @@
+.gitignore
+LICENSE
+README.md
+.vscode/*
+.docs/*
+__pycache__/*
+experiments/*
+strategies/*
+tests/*
