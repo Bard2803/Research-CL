@@ -7,7 +7,7 @@ from evaluation import Evaluation
 from avalanche.training.plugins import EarlyStoppingPlugin, GenerativeReplayPlugin
 from data_loader import DataLoader
 from models import SimpleCNNGrayScale
-# from utils import *
+from utils import *
 
 
 
