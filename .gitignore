@@ -94,3 +94,6 @@ venv.bak/
 # Others
 *.sav
 wandb/
+.dockerignore
+.gitignore
+.vscode/*

@@ -12,8 +12,7 @@ class DataLoader:
         self.config = config 
         self.dataset = self.prepare_dataset(dataset_name, scenario)
 
-    def prepare_core50(self, scenario):
-        val_fraction = self.config.get("dataset").get("validation_fraction")
+    def prepare_core50(self, scenario, val_fraction):
         mini = self.config.get("scenario").get("mini")
         object_lvl = self.config.get("scenario").get("object_lvl")
         if scenario == "ni":
@@ -33,32 +32,27 @@ class DataLoader:
         core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
         return core50
     
-    def prepare_splitmnist(self):
-        val_fraction = self.config.get("dataset").get("validation_fraction")
-        num_experiences = self.config.get("scenario").get("num_experiences")
-        core50 = SplitMNIST(n_experiences=num_experiences, return_task_id=True)
-        f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
-        core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
-        return core50
+    def prepare_splitmnist(self, num_experiences, f):
+        splitMNIST = SplitMNIST(n_experiences=num_experiences, return_task_id=True)
+        splitMNIST = benchmark_with_validation_stream(splitMNIST, custom_split_strategy=f)
+        return splitMNIST
     
-    def prepare_splitcifar10(self):
-        val_fraction = self.config.get("dataset").get("validation_fraction")
-        num_experiences = self.config.get("scenario").get("num_experiences")
-        core50 = SplitCIFAR10(n_experiences=num_experiences, return_task_id=True)
-        f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
-        core50 = benchmark_with_validation_stream(core50, custom_split_strategy=f)
-        return core50
-
+    def prepare_splitcifar10(self, num_experiences, f):
+        splitCIFAR10 = SplitCIFAR10(n_experiences=num_experiences, return_task_id=True)
+        splitCIFAR10 = benchmark_with_validation_stream(splitCIFAR10, custom_split_strategy=f)
+        return splitCIFAR10
 
     def prepare_dataset(self, dataset_name, scenario):
+        val_fraction = self.config.get("dataset").get("validation_fraction")
+        num_experiences = self.config.get("scenario").get("num_experiences")
+        f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
         if dataset_name == "core50":
-            return self.prepare_core50(scenario)
+            return self.prepare_core50(scenario, val_fraction)
         if dataset_name == "splitmnist":
-            return self.prepare_splitmnist()
+            return self.prepare_splitmnist(num_experiences, f)
         if dataset_name == "splitcifar10":
-            return self.prepare_splitcifar10()
+            return self.prepare_splitcifar10(num_experiences, f)
         else:
-            # Handle other datasets or raise an error
             raise ValueError(f"Dataset '{dataset_name}' not supported")
 
     def get_train_stream(self):

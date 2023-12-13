@@ -7,6 +7,7 @@ from evaluation import Evaluation
 from avalanche.training.plugins import EarlyStoppingPlugin, GenerativeReplayPlugin
 from data_loader import DataLoader
 from models import SimpleCNNGrayScale
+# from utils import *
 
 
 
@@ -108,19 +109,19 @@ class Trainer():
 
                     if strategy_name == "CWR*":
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, cwr_layer_name='classifier.0', device=self.device,
+                        self.model, self.optimizer, self.criterion, cwr_layer_name='classifier.0', device=self.device,\
                         train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     elif strategy_name == "GEM":
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, device=self.device, patterns_per_exp=1024, memory_strength=1,
+                        self.model, self.optimizer, self.criterion, device=self.device, patterns_per_exp=1024, memory_strength=1,\
                         train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     elif strategy_name == "EWC":
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, ewc_lambda=100, device=self.device,
+                        self.model, self.optimizer, self.criterion, ewc_lambda=100, device=self.device,\
                         train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
@@ -129,13 +130,12 @@ class Trainer():
                         epochs, 2, EarlyStoppingPlugin(patience, "valid"), dataset)
                         
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, device=self.device,
+                        self.model, self.optimizer, self.criterion, device=self.device,\
                         train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
                         eval_every=eval_every, generator_strategy=generator_strategy, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     else:
-                        cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, device=self.device,
+                        cl_strategy = strategy(self.model, self.optimizer, criterion=self.criterion, device=self.device, \
                         train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
                     
@@ -145,9 +145,14 @@ class Trainer():
                         print(f"Experience number train {train_experience.current_experience}")
                         print(f"classes in this experience train {train_experience.classes_in_this_experience}")
                         print(f"Classes seen so far train {train_experience.classes_seen_so_far}")
-                        print(f"Number of examples before fraction take {len(train_experience.dataset)}")
-                        train_experience.dataset = train_experience.dataset.subset(range(int(len(train_experience.dataset)*fraction_to_take)))
+                        print(f"Number of train examples before fraction take {len(train_experience.dataset)}")
+                        print(f"Number of val examples before fraction take {len(val_experience.dataset)}")
+                        # train_experience.dataset = train_experience.dataset.subset(range(int(len(train_experience.dataset)*fraction_to_take)))
+                        # val_experience.dataset = val_experience.dataset.subset(range(int(len(val_experience.dataset)*fraction_to_take)))
+                        train_experience = load_balanced_subset_of_experience(train_experience)
+                        val_experience = load_balanced_subset_of_experience(val_experience)
                         print(f"Training on {len(train_experience.dataset)} examples")
+                        print(f"Validating on {len(val_experience.dataset)} examples")
 
                         cl_strategy.train(train_experience, eval_streams=[val_experience])
 
