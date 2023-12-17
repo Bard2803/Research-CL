@@ -4,9 +4,8 @@ from train import Trainer
 import os
 
 def main():
-    # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Continual Learning with PyTorch')
-    parser.add_argument('--config_file', type=str, default='config.yaml', help='Path to the configuration file')
+    parser.add_argument('--api_key', type=str, help='api key to wandb.')
     args = parser.parse_args()
 
     main_path = os.path.dirname(os.path.abspath(__file__))

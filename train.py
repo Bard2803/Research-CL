@@ -26,7 +26,6 @@ class Trainer():
         self.config = config
         self.num_classes = config.get("model").get("num_classes")
 
-
     def init_model(self, dataset):
         if dataset == "splitmnist":
             self.model = SimpleCNNGrayScale(num_classes=self.num_classes).to(self.device)
@@ -36,7 +35,6 @@ class Trainer():
         self.optimizer = Adam(self.model.parameters(), lr=self.lr)
         self.criterion = CrossEntropyLoss()
         #Line 1453 in thesis_code.py
-
 
     def Generator_Strategy(self, n_classes, lr, batchsize_train, batchsize_eval, epochs, nhid, ES_plugin, dataset):
         
@@ -83,8 +81,7 @@ class Trainer():
                     benchmarks_list.append((dataset, scenario))
             else:
                 benchmarks_list.append((dataset, None))
-        return benchmarks_list
-        
+        return benchmarks_list  
 
     def train(self):
         num_runs = self.config.get("training").get("num_runs")
@@ -94,7 +91,6 @@ class Trainer():
         fraction_to_take = self.config.get("dataset").get("fraction_to_take")
         eval_every = self.config.get("training").get("eval_every")
         patience = self.config.get("training").get("patience")
-        
         strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "Cumulative": Cumulative}
         benchmarks = self.generate_benchmarks_list()
         for dataset, scenario in benchmarks:
@@ -109,36 +105,36 @@ class Trainer():
 
                     if strategy_name == "CWR*":
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, cwr_layer_name='classifier.0', device=self.device,\
-                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
+                        self.model, self.optimizer, self.criterion, cwr_layer_name='classifier.0', device=self.device,
+                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin,
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     elif strategy_name == "GEM":
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, device=self.device, patterns_per_exp=1024, memory_strength=1,\
-                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
+                        self.model, self.optimizer, self.criterion, device=self.device, patterns_per_exp=1024, memory_strength=1,
+                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin,
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     elif strategy_name == "EWC":
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, ewc_lambda=100, device=self.device,\
-                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
+                        self.model, self.optimizer, self.criterion, ewc_lambda=100, device=self.device,
+                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin,
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     elif strategy_name == "GR":
-                        generator_strategy = self.Generator_Strategy(self.num_classes, self.lr, batchsize_train, batchsize_eval,\
+                        generator_strategy = self.Generator_Strategy(self.num_classes, self.lr, batchsize_train, batchsize_eval,
                         epochs, 2, EarlyStoppingPlugin(patience, "valid"), dataset)
                         
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, device=self.device,\
-                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
+                        self.model, self.optimizer, self.criterion, device=self.device,
+                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin,
                         eval_every=eval_every, generator_strategy=generator_strategy, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     else:
-                        cl_strategy = strategy(self.model, self.optimizer, criterion=self.criterion, device=self.device, \
-                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin, \
-                        eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
-                    
+                        cl_strategy = strategy(
+                        self.model, self.optimizer, criterion=self.criterion, device=self.device, 
+                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval,
+                        evaluator=eval_plugin, eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     print(f"Current training strategy: {cl_strategy}")
                     for train_experience, val_experience in zip(train_stream, val_stream):
@@ -149,8 +145,8 @@ class Trainer():
                         print(f"Number of val examples before fraction take {len(val_experience.dataset)}")
                         # train_experience.dataset = train_experience.dataset.subset(range(int(len(train_experience.dataset)*fraction_to_take)))
                         # val_experience.dataset = val_experience.dataset.subset(range(int(len(val_experience.dataset)*fraction_to_take)))
-                        train_experience = load_balanced_subset_of_experience(train_experience)
-                        val_experience = load_balanced_subset_of_experience(val_experience)
+                        train_experience.dataset = load_subset_train_or_val(train_experience, fraction_to_take)
+                        val_experience.dataset = load_subset_train_or_val(val_experience, fraction_to_take)
                         print(f"Training on {len(train_experience.dataset)} examples")
                         print(f"Validating on {len(val_experience.dataset)} examples")
 

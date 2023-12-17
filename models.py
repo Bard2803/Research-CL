@@ -1,4 +1,5 @@
 import torch.nn as nn
+from avalanche.models import SimpleCNN
 
 
 class SimpleCNNGrayScale(nn.Module):

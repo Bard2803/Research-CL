@@ -1,7 +1,7 @@
 from torch.utils.data import Subset
 import numpy as np
 
-def load_balanced_subset_of_experience(experience, fraction=0.5):
+def load_subset_train_or_val(experience, fraction):
     """ Load a balanced subset of the experience """
     classes = []
     for sample_class in experience.dataset:
@@ -12,9 +12,9 @@ def load_balanced_subset_of_experience(experience, fraction=0.5):
     counter = 0
     indices_to_take = []
     for num_occurances in classes_occurance:
-        indices = num_occurances*fraction
+        indices = int(num_occurances*fraction)
         indices = range(counter, indices+counter)
         counter += num_occurances
         indices_to_take += indices
 
-    return experience.dataset.subset()
+    return experience.dataset.subset(indices_to_take)

@@ -12,17 +12,17 @@ class Evaluation():
     def __init__(self, config, dataset, scenario):
         self.config = config
         if scenario:
-            self.group_name = dataset + "_" + scenario + "_" + str(datetime.now()) 
+            self.group_name = dataset + "_" + scenario + "_" + str(datetime.now())
         else:
-            self.group_name = dataset + "_" + str(datetime.now()) 
+            self.group_name = dataset + "_" + str(datetime.now())
 
-        
     def create_evaluator(self, run_name):
         loggers = []
         project_name = self.config.get("wandb").get("project_name")
-        loggers.append(WandBLogger(project_name=project_name, run_name=run_name, \
-                                   params={"reinit": True, "group": self.group_name}, config=self.config))
-        loggers.append(InteractiveLogger())
+        wandb = WandBLogger(project_name=project_name, run_name=run_name,
+                                    params={"reinit": True, "group": self.group_name}, config=self.config)
+        loggers.append(wandb)
+        loggers.append(InteractiveLogger())     
         self.eval_plugin = EvaluationPlugin(
         loss_metrics(epoch=True, stream=True),
         accuracy_metrics(epoch=True, stream=True),
@@ -34,8 +34,8 @@ class Evaluation():
         # forward_transfer_metrics(stream=True),
         forgetting_metrics(stream=True),
         loggers=loggers,
-        strict_checks=False)
-
+        strict_checks=False
+        )
 
     def get_eval_plugin(self):
         return self.eval_plugin
