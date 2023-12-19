@@ -1,5 +1,4 @@
 import torch.nn as nn
-from avalanche.models import SimpleCNN
 
 
 class SimpleCNNGrayScale(nn.Module):
@@ -15,7 +14,7 @@ class SimpleCNNGrayScale(nn.Module):
     """
 
     def __init__(self, num_classes=10):
-        super(SimpleCNN, self).__init__()
+        super(SimpleCNNGrayScale, self).__init__()
 
         self.features = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
