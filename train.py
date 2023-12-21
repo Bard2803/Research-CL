@@ -36,14 +36,14 @@ class Trainer():
         self.criterion = CrossEntropyLoss()
         #Line 1453 in thesis_code.py
 
-    def Generator_Strategy(self, n_classes, lr, batchsize_train, batchsize_eval, epochs, nhid, ES_plugin, dataset):
+    def Generator_Strategy(self, n_classes, data_sample_shape, lr, batchsize_train, batchsize_eval, epochs, nhid, ES_plugin, dataset):
         
         if dataset == "splitmnist":
             # First argument is shape of input sample so 1 for GrayScale 32x32 for image resolution
-            generator = MlpVAE((1, 32, 32), nhid, n_classes, device=self.device)
+            generator = MlpVAE(data_sample_shape, nhid, n_classes, device=self.device)
         else:
             # First argument is shape of input sample so 3 for RGB 32x32 for image resolution
-            generator = MlpVAE((3, 32, 32), nhid, n_classes, device=self.device)
+            generator = MlpVAE(data_sample_shape, nhid, n_classes, device=self.device)
         optimizer = Adam(generator.parameters(), lr=lr)
         # optimzer:
 
@@ -92,9 +92,11 @@ class Trainer():
         eval_every = self.config.get("training").get("eval_every")
         patience = self.config.get("training").get("patience")
         strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "Cumulative": Cumulative}
+        strategies = {"GR": GenerativeReplay}
         benchmarks = self.generate_benchmarks_list()
         for dataset, scenario in benchmarks:
             train_stream, val_stream, test_stream = self.get_dataset(dataset, scenario)
+            data_sample_shape = train_stream[0].dataset[0][0].shape
             Evaluator = Evaluation(self.config, dataset, scenario)
             for j in range(num_runs):
                 for strategy_name, strategy in strategies.items():
@@ -122,7 +124,7 @@ class Trainer():
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 
                     elif strategy_name == "GR":
-                        generator_strategy = self.Generator_Strategy(self.num_classes, self.lr, batchsize_train, batchsize_eval,
+                        generator_strategy = self.Generator_Strategy(self.num_classes, data_sample_shape, self.lr, batchsize_train, batchsize_eval,
                         epochs, 2, EarlyStoppingPlugin(patience, "valid"), dataset)
                         
                         cl_strategy = strategy(
