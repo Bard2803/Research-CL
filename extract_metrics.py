@@ -5,13 +5,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 class Metrics():
-    def __init__(self, config):
+    def __init__(self, config, group_name):
         wandb.login()
         api = wandb.Api()
         self.config = config
         project_name = config.get("wandb").get("project_name")
-        self.runs = api.runs(project_name)
-        self.metrics_path = self.create_folder("metrics_extraction")
+        self.runs = api.runs(project_name, filters = {"group": group_name})
+        folder_name = config.get("wandb_metrics_extraction").get("folder_name")
+        self.metrics_path = self.create_folder(folder_name)
 
     def create_folder(self, folder_name):
         # Check if the folder exists
@@ -51,7 +52,7 @@ class Metrics():
         history.to_excel(os.path.join(self.metrics_path, "convergence_output.xlsx"))
 
         # Strategies names without version numbers
-        strategies = ['Cumulative', 'EWC', 'GEM', 'CWR', 'Naive']
+        strategies = ["Naive", "CWR*", "GEM", "EWC", "GR", "Cumulative"]
 
         # Calculate the mean and standard deviation for each strategy
         summary = {}
@@ -126,7 +127,8 @@ if __name__ == "__main__":
 
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
-    metrics = Metrics(config)
+    group_name = "core50_nc_2023-12-17 19:54:00.739051"
+    metrics = Metrics(config, group_name)
     metrics.extract_convergence()
 
     # Call method for appropriate metrics extraction

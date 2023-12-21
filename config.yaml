@@ -31,3 +31,6 @@ wandb:
 project:
   name: ""
   group_name: ""
+
+wandb_metrics_extraction:
+  folder_name: "metrics_extraction"
