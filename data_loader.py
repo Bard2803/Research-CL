@@ -19,11 +19,6 @@ class DataLoader:
             core50 = CORe50(scenario=scenario, mini=mini, object_lvl=object_lvl)
             f = lambda exp: random_validation_split_strategy(val_fraction, False, exp)
         elif scenario == "nc":
-            # Load the CORe50 dataset
-            # core50_train = CORe50Dataset(train=True, mini=mini, object_level=object_lvl)
-            # core50_test = CORe50Dataset(train=False, mini=mini, object_level=object_lvl)
-            # # Create different split
-            # core50 = nc_benchmark(core50_train, core50_test, n_experiences=10, shuffle=False, task_labels=False, train_transform=transform(), eval_transform=transform())
             core50 = CORe50(scenario=scenario, mini=mini, object_lvl=object_lvl)
             f = lambda exp: class_balanced_split_strategy(val_fraction, exp)
         else:

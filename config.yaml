@@ -1,6 +1,6 @@
 training:
   learning_rate: 0.001
-  epochs: 200
+  epochs: 1
   batch_size: 128
   patience: 25
   num_runs: 1
@@ -27,10 +27,6 @@ wandb:
   use_wandb: True
   project_name: "CL-Research"
   entity: "Bard"
-
-project:
-  name: ""
-  group_name: ""
 
 wandb_metrics_extraction:
   folder_name: "metrics_extraction"

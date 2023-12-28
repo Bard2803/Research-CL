@@ -97,3 +97,4 @@ wandb/
 .dockerignore
 .gitignore
 .vscode/*
+metrics_extraction/

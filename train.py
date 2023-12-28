@@ -81,7 +81,7 @@ class Trainer():
                     benchmarks_list.append((dataset, scenario))
             else:
                 benchmarks_list.append((dataset, None))
-        return benchmarks_list  
+        return benchmarks_list
 
     def train(self):
         num_runs = self.config.get("training").get("num_runs")
@@ -93,7 +93,7 @@ class Trainer():
         patience = self.config.get("training").get("patience")
         strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "Cumulative": Cumulative}
         benchmarks = self.generate_benchmarks_list()
-        for dataset, scenario in benchmarks[2:]:
+        for dataset, scenario in benchmarks:
             train_stream, val_stream, test_stream = self.get_dataset(dataset, scenario)
             data_sample_shape = train_stream[0].dataset[0][0].shape
             Evaluator = Evaluation(self.config, dataset, scenario)

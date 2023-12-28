@@ -22,11 +22,9 @@ class Metrics():
             # Create the folder if it does not exist
             os.makedirs(folder_path)
         return folder_path
-
-    def extract_convergence(self):
-        # Initialize empty DataFrame
+    
+    def num_epochs_per_experience(self):
         df = pd.DataFrame()
-
         counts = []
         counter = 0
         strategy_names = []
@@ -37,26 +35,23 @@ class Metrics():
             counts = [] 
             strategy_names.append(run.name)
             for index, row in history.iterrows():
-                if str(row['TrainingExperience']).split('.')[0].isdigit():
+                if isinstance(row['TrainingExperience'], float) and row['TrainingExperience'] > 0:
                     counter += 1
                     # Append the count to the list and reset the counter
                     counts.append(counter)
                     counter = 0
                 else:
                     counter += 1
-            # print(len(counts))
             df[run.name + str(strategy_names.count(run.name))] = counts
-
         print("COUNTS", df.head(10))
-
         history.to_excel(os.path.join(self.metrics_path, "convergence_output.xlsx"))
 
-        # Strategies names without version numbers
-        strategies = ["Naive", "CWR*", "GEM", "EWC", "GR", "Cumulative"]
-
+        return num_runs, df
+    
+    def calculate_convergence(self, num_runs, df):
+        strategies = ["Cumulative", "GR", "EWC", "GEM", "CWR*", "Naive"]
         # Calculate the mean and standard deviation for each strategy
         summary = {}
-        fig, ax = plt.subplots(figsize=(12, 6))
         for strategy in strategies:
             # For mean and standard deviation of sum of epochs
             columns = [col for col in df.columns if col.startswith(strategy)]
@@ -65,7 +60,6 @@ class Metrics():
             mean = values.mean()
             std = values.std()
             summary[strategy] = {'mean': mean, 'std': std}
-
 
             # For number of epochs
             strategy_data = []
@@ -92,7 +86,6 @@ class Metrics():
         plt.tight_layout()
         plt.grid(True)
         plt.savefig(os.path.join(self.metrics_path, "epochs.png"))
-
 
         # For mean and standard deviation of sum of epochs
         # Convert the summary to a DataFrame for better visualization
@@ -121,13 +114,18 @@ class Metrics():
 
         print("finished extracting convergence")
 
+    def extract_convergence(self):
+        num_runs, df = self.num_epochs_per_experience()
+        self.calculate_convergence(num_runs, df)
+
+
 
 if __name__ == "__main__":
     main_path = os.path.dirname(os.path.abspath(__file__))
 
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
-    group_name = "core50_nc_2023-12-17 19:54:00.739051"
+    group_name = "splitcifar10_2023-12-22 00:24:23.623113"
     metrics = Metrics(config, group_name)
     metrics.extract_convergence()
 
