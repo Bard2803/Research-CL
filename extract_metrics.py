@@ -48,52 +48,10 @@ class Metrics():
 
         return num_runs, df
     
-    def calculate_convergence(self, num_runs, df):
-        strategies = ["Cumulative", "GR", "EWC", "GEM", "CWR*", "Naive"]
-        # Calculate the mean and standard deviation for each strategy
-        summary = {}
-        for strategy in strategies:
-            # For mean and standard deviation of sum of epochs
-            columns = [col for col in df.columns if col.startswith(strategy)]
-            strategy_data = df[columns]
-            values = strategy_data.values
-            mean = values.mean()
-            std = values.std()
-            summary[strategy] = {'mean': mean, 'std': std}
-
-            # For number of epochs
-            strategy_data = []
-            for i in range(num_runs):
-                Cumulative = f'{strategy}{i}'
-                if Cumulative in df:
-                    strategy_data.extend(df[Cumulative])
-            plt.plot(range(len(strategy_data)), strategy_data, marker='o', label=strategy)
-
-        # For number of epochs
-        # plt.axhline(y=PATIENCE, color='red', linewidth=2, linestyle='--', label='Patience')
-        plt.xlabel('Experience')
-        plt.ylabel('Number of epochs')
-        plt.title('Number of epochs in each experience for class incremental scenario')
-        # Set custom tick labels
-        total_iterations = num_runs * 10  # 10 runs, 10 counts for each experience
-        tick_positions = list(range(total_iterations))
-        tick_labels = [str(i % 10) for i in range(total_iterations)]
-        plt.xticks(tick_positions, tick_labels)
-        plt.xticks(range(len(strategy_data)))
-        plt.legend()
-
-        # Show plot
-        plt.tight_layout()
-        plt.grid(True)
-        plt.savefig(os.path.join(self.metrics_path, "epochs.png"))
-
-        # For mean and standard deviation of sum of epochs
-        # Convert the summary to a DataFrame for better visualization
-        summary_df = pd.DataFrame(summary).T
-
+    def plot_bar_chart(self, summary, print_plot=False):
         # Plot
         plt.figure(figsize=(10, 5))
-        bars = plt.bar(summary_df.index, summary_df['mean'], yerr=summary_df['std'], capsize=7, color='skyblue', edgecolor='black')
+        bars = plt.bar(summary['strategy'], summary['mean'], yerr=summary['std'], capsize=7, color='skyblue', edgecolor='black')
 
         # Adding titles and labels
         plt.title('Mean and Standard Deviation of number of epochs to convergence')
@@ -101,7 +59,7 @@ class Metrics():
         plt.ylabel('Number of epochs')
 
         # Adding numerical values at the top of each bar
-        for bar, value in zip(bars, summary_df['mean']):
+        for bar, value in zip(bars, summary['mean']):
             plt.annotate(f'{value:.2f}', xy=(bar.get_x() + bar.get_width() / 3, value),
                         xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
 
@@ -109,10 +67,53 @@ class Metrics():
         plt.savefig(os.path.join(self.metrics_path,"strategies.png"))
 
         # Print the summary DataFrame
-        print(summary_df)
-        wandb.finish()
+        if print_plot:
+            print(summary)
+        
+    
+    def calculate_convergence(self, num_runs, df):
+        strategies = ["Cumulative", "GR", "EWC", "GEM", "CWR*", "Naive"]
+        # Calculate the mean and standard deviation for each strategy
+        columns = ['strategy', 'mean', 'std']
+        summary = pd.DataFrame(columns=columns)
+        for strategy in strategies:
+            # For mean and standard deviation of sum of epochs
+            columns = [col for col in df.columns if col.startswith(strategy)]
+            strategy_data = df[columns]
+            values = strategy_data.values
+            mean = values.mean()
+            std = values.std()
+            summary = pd.concat([summary, pd.DataFrame([{"strategy": strategy, "mean": mean, "std": std}])], ignore_index=True)
 
+        #     # For number of epochs
+        #     strategy_data = []
+        #     for i in range(num_runs):
+        #         Cumulative = f'{strategy}{i}'
+        #         if Cumulative in df:
+        #             strategy_data.extend(df[Cumulative])
+        #     plt.plot(range(len(strategy_data)), strategy_data, marker='o', label=strategy)
+
+        # # For number of epochs
+        # # plt.axhline(y=PATIENCE, color='red', linewidth=2, linestyle='--', label='Patience')
+        # plt.xlabel('Experience')
+        # plt.ylabel('Number of epochs')
+        # plt.title('Number of epochs in each experience for class incremental scenario')
+        # # Set custom tick labels
+        # total_iterations = num_runs * 10  # 10 runs, 10 counts for each experience
+        # tick_positions = list(range(total_iterations))
+        # tick_labels = [str(i % 10) for i in range(total_iterations)]
+        # plt.xticks(tick_positions, tick_labels)
+        # plt.xticks(range(len(strategy_data)))
+        # plt.legend()
+
+        # # Show plot
+        # plt.tight_layout()
+        # plt.grid(True)
+        # plt.savefig(os.path.join(self.metrics_path, "epochs.png"))
+        self.plot_bar_chart(summary)
+        wandb.finish()
         print("finished extracting convergence")
+
 
     def extract_convergence(self):
         num_runs, df = self.num_epochs_per_experience()
@@ -125,7 +126,7 @@ if __name__ == "__main__":
 
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
-    group_name = "splitcifar10_2023-12-22 00:24:23.623113"
+    group_name = "splitmnist_2023-12-21 22:12:29.655607"
     metrics = Metrics(config, group_name)
     metrics.extract_convergence()
 

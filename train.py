@@ -93,7 +93,7 @@ class Trainer():
         patience = self.config.get("training").get("patience")
         strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "Cumulative": Cumulative}
         benchmarks = self.generate_benchmarks_list()
-        for dataset, scenario in benchmarks:
+        for dataset, scenario in benchmarks[2:]:
             train_stream, val_stream, test_stream = self.get_dataset(dataset, scenario)
             data_sample_shape = train_stream[0].dataset[0][0].shape
             Evaluator = Evaluation(self.config, dataset, scenario)
