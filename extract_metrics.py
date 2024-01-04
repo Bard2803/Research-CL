@@ -3,6 +3,7 @@ import wandb
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 
 class Metrics():
     def __init__(self, config, group_name):
@@ -28,6 +29,7 @@ class Metrics():
         counts = []
         counter = 0
         strategy_names = []
+        num_experiences = self.config.get("scenario").get("num_experiences")
         # Fetch the logged metrics for each run
         for num_runs, run in enumerate(self.runs, 1):
             history = run.history()
@@ -35,13 +37,15 @@ class Metrics():
             counts = [] 
             strategy_names.append(run.name)
             for index, row in history.iterrows():
-                if isinstance(row['TrainingExperience'], float) and row['TrainingExperience'] > 0:
+                if not np.isnan(row['TrainingExperience']):
                     counter += 1
                     # Append the count to the list and reset the counter
                     counts.append(counter)
                     counter = 0
                 else:
                     counter += 1
+            while len(counts) != num_experiences:
+                counts.append(sum(counts)/len(counts))
             df[run.name + str(strategy_names.count(run.name))] = counts
         print("COUNTS", df.head(10))
         history.to_excel(os.path.join(self.metrics_path, "convergence_output.xlsx"))
@@ -126,7 +130,7 @@ if __name__ == "__main__":
 
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
-    group_name = "splitmnist_2023-12-21 22:12:29.655607"
+    group_name = "splitmnist_2023-12-28 23:39:50.634813"
     metrics = Metrics(config, group_name)
     metrics.extract_convergence()
 
