@@ -123,7 +123,156 @@ class Metrics():
         num_runs, df = self.num_epochs_per_experience()
         self.calculate_convergence(num_runs, df)
 
+    
+    def save_metrics_xlsx(self):
+        data = pd.DataFrame()
 
+        # Fetch the logged metrics for each run
+        for run in self.runs:
+            history = run.history(stream="system")
+            history['run_id'] = run.id
+            history['strategy_name'] = run.name
+            data = pd.concat([data, history], ignore_index=True)
+
+        data.to_excel(os.path.join(self.metrics_path, "system_metrics.xlsx"), index=False)
+        data = data.interpolate()
+
+        return data
+
+
+    def extract_system_metrics(self, metric, description):
+        data = self.save_metrics_xlsx()
+        # Create a helper column to detect changes in strategy_name
+        data['index_run'] = data.groupby("run_id").cumcount()
+
+        df_mean = data.groupby(["strategy_name", "index_run"])[[metric, "_runtime"]].mean().reset_index()
+        df_std = data.groupby(["strategy_name", "index_run"])[metric].std().reset_index()
+        df_std['_step'] = data.groupby(["strategy_name", "index_run"])["_runtime"].mean().reset_index()["_runtime"]
+
+        # Pivot data to have strategies as columns
+        pivot_table = df_mean.pivot(index='_runtime', columns='strategy_name', values=metric)
+        pivot_table['the_index'] = range(len(pivot_table))
+        pivot_table_std = df_std.pivot(index='_step', columns='strategy_name', values=metric)
+
+        # akima for gpu.0.gpu and cpu, linear for gpu.0.temp
+        pivot_table.interpolate(method='linear', inplace=True, limit=20)
+        pivot_table_std.interpolate(method='linear', inplace=True, limit=20)
+        
+        # Plotting
+        pivot_table.drop(columns="the_index", inplace=True)
+
+        plt.figure(figsize=(12, 6))
+
+        # Define colors for each strategy
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
+        # Loop through each strategy
+        for i, strategy in enumerate(pivot_table.columns):
+            means = pivot_table[strategy]
+            stds = pivot_table_std[strategy] 
+            x = pivot_table.index / (60*60)
+            # Plot means for this strategy with customizations
+            plt.plot(x, means,
+                    label=strategy,
+                    linewidth=2,
+                    color=colors[i % len(colors)])
+            
+            # Add variance as shadowed region
+            plt.fill_between(x, means - stds, means + stds,
+                            color=colors[i % len(colors)], alpha=0.2)
+
+        # Adding labels and title
+        plt.xlabel('Runtime (h)')
+        plt.ylabel(f'Mean {description}')
+        plt.title(f'Mean {description} with Standard Deviation for Different Strategies')
+        plt.legend()
+
+        plt.savefig(os.path.join(self.metrics_path, description))
+
+    def extract_system_metrics_all(self):
+        all = {"system.gpu.0.powerWatts": "GPU Power Usage (W)", "system.gpu.0.gpu": "GPU Utilization",\
+                          "system.gpu.0.temp": "GPU Temperature (°C)", "system.cpu": "CPU Utilization (%)",\
+                            "system.memory": "System Memory Utilization (%)"}
+        for metric, description in all.items():
+            self.extract_system_metrics(metric, description)
+
+
+    def extract_energy_consumption(self):
+        data = self.save_metrics_xlsx()
+
+        # Create a helper column to detect changes in strategy_name
+        data['index_run'] = data.groupby("run_id").cumcount()
+
+        df_mean= data.groupby(["strategy_name", "index_run"]).agg(
+        mean_metric=("system.gpu.0.powerWatts", 'mean'),
+        std_metric=("system.gpu.0.powerWatts", 'std'),
+        mean_runtime=('_runtime', 'mean')
+        ).reset_index()
+
+        # Pivot data to have strategies as columns
+        pivot_table = df_mean.pivot(index='mean_runtime', columns='strategy_name', values='mean_metric')
+        pivot_table.interpolate(inplace=True, limit=30)
+
+        pivot_table_std = df_mean.pivot(index='mean_runtime', columns='strategy_name', values='std_metric')
+        pivot_table_std.interpolate(inplace=True, limit=30)
+
+        # Lists to store area and standard deviation values
+        energy_list = []
+        std_devs = []
+
+        # Loop through each strategy
+        for strategy in pivot_table.columns:
+            means = pivot_table[strategy].dropna()
+            x = means.index
+
+            stds = pivot_table_std[strategy].dropna()
+            x_stds = stds.index
+            
+            # Calculate area under the curve using the trapezoidal rule
+            energy = np.trapz(means, x) / 1e6
+            std_dev = np.trapz(stds, x_stds)
+            
+            # Append area and standard deviation values to the lists
+            energy_list.append(energy)
+            std_devs.append(std_dev)
+
+        # Create a DataFrame to hold the data for the bar plot
+        bar_data = pd.DataFrame({
+            'Strategy': pivot_table.columns,
+            'Area': energy_list,
+            'Std Dev': std_devs
+        })
+
+        # Sort bar_data in descending order based on 'Area'
+        bar_data = bar_data.sort_values(by='Area', ascending=False)
+
+        # Plotting
+        plt.figure(figsize=(10, 6))
+
+        # Bar plot for energy_list and standard deviations
+        bars = plt.bar(bar_data['Strategy'], bar_data['Area'], capsize=5)
+
+        # Bar plot for energy_list and standard deviations
+        plt.bar(bar_data['Strategy'], bar_data['Area'], capsize=5)
+
+        # Adding labels and title
+        plt.xlabel('Strategy')
+        plt.ylabel('Energy (MJ)')
+        plt.title('GPU energy used for training for different strategies')
+        plt.xticks(rotation=45, ha='right')
+
+        # Adding text labels above the bars
+        for bar, energy in zip(bars, bar_data['Area']):
+            plt.annotate(f'{energy:.2f} MJ', # Text label
+                        xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()), # Position
+                        xytext=(0, 3),  # Offset from the top of the bar
+                        textcoords='offset points',
+                        ha='center', va='bottom') # Text alignment
+
+        # Show plot
+        plt.tight_layout()
+
+        plt.savefig(os.path.join(self.metrics_path, "GPU energy used for training for different strategies"))
 
 if __name__ == "__main__":
     main_path = os.path.dirname(os.path.abspath(__file__))
@@ -132,6 +281,9 @@ if __name__ == "__main__":
     config = Config(config_path)
     group_name = "splitmnist_2023-12-28 23:39:50.634813"
     metrics = Metrics(config, group_name)
-    metrics.extract_convergence()
+    # metrics.extract_convergence()
+    # metrics.extract_system_metrics("system.gpu.0.powerWatts", "GPU Power Usage (W)")
+    # metrics.extract_system_metrics_all()
+    metrics.extract_energy_consumption()
 
     # Call method for appropriate metrics extraction
