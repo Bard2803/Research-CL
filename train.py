@@ -112,7 +112,7 @@ class Trainer():
 
                     elif strategy_name == "GEM":
                         cl_strategy = strategy(
-                        self.model, self.optimizer, self.criterion, device=self.device, patterns_per_exp=1024, memory_strength=1,
+                        self.model, self.optimizer, self.criterion, device=self.device, patterns_per_exp=64, memory_strength=1,
                         train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin,
                         eval_every=eval_every, plugins=[EarlyStoppingPlugin(patience, "valid")])
 

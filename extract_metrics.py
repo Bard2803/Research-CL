@@ -11,6 +11,8 @@ class Metrics():
         api = wandb.Api()
         self.config = config
         project_name = config.get("wandb").get("project_name")
+        self.group_name = group_name
+        wandb.init(project=project_name, group=group_name)
         self.runs = api.runs(project_name, filters = {"group": group_name})
         folder_name = config.get("wandb_metrics_extraction").get("folder_name")
         self.metrics_path = self.create_folder(folder_name)
@@ -186,8 +188,11 @@ class Metrics():
         plt.ylabel(f'Mean {description}')
         plt.title(f'Mean {description} with Standard Deviation for Different Strategies')
         plt.legend()
-
-        plt.savefig(os.path.join(self.metrics_path, description))
+        
+        plot_name =  description + " " + self.group_name + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name)
+        plt.savefig(path_to_plot)
+        wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
     def extract_system_metrics_all(self):
         all = {"system.gpu.0.powerWatts": "GPU Power Usage (W)", "system.gpu.0.gpu": "GPU Utilization",\
@@ -258,7 +263,8 @@ class Metrics():
         # Adding labels and title
         plt.xlabel('Strategy')
         plt.ylabel('Energy (MJ)')
-        plt.title('GPU energy used for training for different strategies')
+        description = 'GPU energy used for training for different strategies'
+        plt.title(description)
         plt.xticks(rotation=45, ha='right')
 
         # Adding text labels above the bars
@@ -269,21 +275,26 @@ class Metrics():
                         textcoords='offset points',
                         ha='center', va='bottom') # Text alignment
 
-        # Show plot
         plt.tight_layout()
-
-        plt.savefig(os.path.join(self.metrics_path, "GPU energy used for training for different strategies"))
+        
+        description = " ".join(description.split()[:2])
+        plot_name =  description + " " + self.group_name + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name)
+        plt.savefig(path_to_plot)
+        wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
 if __name__ == "__main__":
     main_path = os.path.dirname(os.path.abspath(__file__))
 
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
-    group_name = "splitmnist_2023-12-28 23:39:50.634813"
-    metrics = Metrics(config, group_name)
-    # metrics.extract_convergence()
-    # metrics.extract_system_metrics("system.gpu.0.powerWatts", "GPU Power Usage (W)")
-    # metrics.extract_system_metrics_all()
-    metrics.extract_energy_consumption()
+    group_names = ["splitmnist_2023-12-28 23:39:50.634813", "core50_nc_2024-01-09 22:29:34.163106", "splitcifar10_2023-12-30 03:39:02.869152"]
+    for group_name in group_names:
+        metrics = Metrics(config, group_name)
+        # metrics.extract_convergence()
+        # metrics.extract_system_metrics("system.gpu.0.powerWatts", "GPU Power Usage (W)")
+        metrics.extract_system_metrics_all()
+        # metrics.extract_energy_consumption()
+        wandb.finish()
 
     # Call method for appropriate metrics extraction
