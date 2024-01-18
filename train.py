@@ -6,10 +6,17 @@ from avalanche.training.supervised import Naive, Cumulative, EWC, GenerativeRepl
 from evaluation import Evaluation
 from avalanche.training.plugins import EarlyStoppingPlugin, GenerativeReplayPlugin
 from data_loader import DataLoader
-from models import SimpleCNNGrayScale
+from models import SimpleCNNGrayScale, SimpleCNNWithBN, ClassifierCNN2D
+from RMNPlugin import RMNPlugin, argsRMN
 from utils import *
 
+import torch.nn as nn
+import math
 
+from avalanche.models.dynamic_modules import (
+    MultiTaskModule,
+    MultiHeadClassifier,
+)
 
 class Trainer():
     def __init__(self, config):
@@ -26,14 +33,20 @@ class Trainer():
         self.config = config
         self.num_classes = config.get("model").get("num_classes")
 
-    def init_model(self, dataset):
+    def init_model(self, dataset, data_shape, strategy_name, num_experiences):
+        num_channel = 3
         if dataset == "splitmnist":
-            self.model = SimpleCNNGrayScale(num_classes=self.num_classes).to(self.device)
+            num_channel = 1
+
+        if (strategy_name == "RMN"):
+            self.model = ClassifierCNN2D(output_shape=self.num_classes, num_channels=num_channel, image_size=data_shape[-1], tasks=num_experiences).to(self.device)
         else:
-            self.model = SimpleCNN(num_classes=self.num_classes).to(self.device)
+            self.model = SimpleCNNWithBN(num_classes=self.num_classes, num_channel=num_channel, image_size=data_shape[-1]).to(self.device)
+
         self.lr = self.config.get("training").get("learning_rate")
         self.optimizer = Adam(self.model.parameters(), lr=self.lr)
         self.criterion = CrossEntropyLoss()
+        self.dataset = dataset
         #Line 1453 in thesis_code.py
 
     def Generator_Strategy(self, n_classes, data_sample_shape, lr, batchsize_train, batchsize_eval, epochs, nhid, ES_plugin, dataset):
@@ -91,7 +104,8 @@ class Trainer():
         fraction_to_take = self.config.get("dataset").get("fraction_to_take")
         eval_every = self.config.get("training").get("eval_every")
         patience = self.config.get("training").get("patience")
-        strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "Cumulative": Cumulative}
+        #strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "RMN": RelevanceMappingNetworks, "Cumulative": Cumulative}
+        strategies = {"Naive": Naive, "RMN": Naive, "Cumulative": Cumulative}
         benchmarks = self.generate_benchmarks_list()
         for dataset, scenario in benchmarks:
             train_stream, val_stream, test_stream = self.get_dataset(dataset, scenario)
@@ -100,7 +114,8 @@ class Trainer():
             for j in range(num_runs):
                 for strategy_name, strategy in strategies.items():
                     # reinitilizate the model each run to reset its parameters and avoid carry over effect
-                    self.init_model(dataset)
+                    self.init_model(dataset=dataset, data_shape=data_sample_shape, strategy_name=strategy_name,
+                                    num_experiences=len(train_stream))
                     Evaluator.create_evaluator(strategy_name)
                     eval_plugin = Evaluator.get_eval_plugin()
 
@@ -130,6 +145,11 @@ class Trainer():
                         self.model, self.optimizer, self.criterion, device=self.device,
                         train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval, evaluator=eval_plugin,
                         eval_every=eval_every, generator_strategy=generator_strategy, plugins=[EarlyStoppingPlugin(patience, "valid")])
+
+                    elif strategy_name == "RMN":
+                        cl_strategy = strategy(self.model, self.optimizer, criterion=self.criterion, device=self.device,
+                        train_mb_size=batchsize_train, train_epochs=epochs, eval_mb_size=batchsize_eval,
+                        evaluator=eval_plugin, eval_every=eval_every, plugins=[RMNPlugin(n_epochs=epochs), EarlyStoppingPlugin(patience, "valid")])
 
                     else:
                         cl_strategy = strategy(
