@@ -12,9 +12,9 @@ class Evaluation():
     def __init__(self, config, dataset, scenario):
         self.config = config
         if scenario:
-            self.group_name = dataset + "_" + scenario + "_" + str(datetime.now())
+            self.group_name = dataset + "_" + scenario + "_" + str(datetime.now().strftime("%m/%d/%Y, %H:%M"))
         else:
-            self.group_name = dataset + "_" + str(datetime.now())
+            self.group_name = dataset + "_" + str(datetime.now().strftime("%m/%d/%Y, %H:%M"))
 
     def create_evaluator(self, run_name):
         loggers = []

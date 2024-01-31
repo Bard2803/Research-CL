@@ -26,6 +26,11 @@ class Metrics():
             os.makedirs(folder_path)
         return folder_path
     
+    def save_plot(self, description):
+        plot_name =  description + " " + self.group_name + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name)
+        plt.savefig(path_to_plot)
+
     def num_epochs_per_experience(self):
         df = pd.DataFrame()
         counts = []
@@ -70,7 +75,7 @@ class Metrics():
                         xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
 
         # Show plot
-        plt.savefig(os.path.join(self.metrics_path,"strategies.png"))
+        plt.savefig(os.path.join(self.metrics_path, f"strategies_{self.group_name}.png"))
 
         # Print the summary DataFrame
         if print_plot:
@@ -189,9 +194,7 @@ class Metrics():
         plt.title(f'Mean {description} with Standard Deviation for Different Strategies')
         plt.legend()
         
-        plot_name =  description + " " + self.group_name + ".png"
-        path_to_plot = os.path.join(self.metrics_path, plot_name)
-        plt.savefig(path_to_plot)
+        self.save_plot(description)
         # wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
     def extract_system_metrics_all(self):
@@ -278,9 +281,7 @@ class Metrics():
         plt.tight_layout()
         
         description = " ".join(description.split()[:2])
-        plot_name =  description + " " + self.group_name + ".png"
-        path_to_plot = os.path.join(self.metrics_path, plot_name)
-        plt.savefig(path_to_plot)
+        self.save_plot(description)
         # wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
 if __name__ == "__main__":
