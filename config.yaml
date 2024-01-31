@@ -29,3 +29,4 @@ wandb:
 
 wandb_metrics_extraction:
   folder_name: "metrics_extraction"
+  group_names: ["core50_nc_2024-01-26 21:28:24.151638", "core50_nc_2024-01-28 23:48:28.467730"]
