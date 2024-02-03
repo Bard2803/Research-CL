@@ -3,7 +3,7 @@ training:
   epochs: 200
   batch_size: 128
   patience: 25
-  num_runs: 5
+  num_runs: 2
   eval_every: 2
   es_metric: ["Top1_Acc_Stream", "Loss_Stream"]
 
@@ -29,4 +29,4 @@ wandb:
 
 wandb_metrics_extraction:
   folder_name: "metrics_extraction"
-  group_names: ["core50_nc_2024-01-26 21:28:24.151638", "core50_nc_2024-01-28 23:48:28.467730"]
+  group_names: ["splitcifar10_02/03/2024, 05:13", "splitmnist_02/03/2024, 01:04", "core50_ni_02/02/2024, 15:44", "core50_nc_01/31/2024, 21:35"]

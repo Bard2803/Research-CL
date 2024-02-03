@@ -13,9 +13,10 @@ class Metrics():
         project_name = config.get("wandb").get("project_name")
         self.group_name = group_name
         # wandb.init(project=project_name, group=group_name)
-        self.runs = api.runs(project_name, filters = {"group": group_name})
+        self.runs = api.runs(project_name, filters = {"group": self.group_name})
         folder_name = config.get("wandb_metrics_extraction").get("folder_name")
         self.metrics_path = self.create_folder(folder_name)
+        self.benchmark_name  = group_name.split("_")[:-1][0]
 
     def create_folder(self, folder_name):
         # Check if the folder exists
@@ -28,7 +29,7 @@ class Metrics():
     
     def save_plot(self, description):
         plot_name =  description + " " + self.group_name + ".png"
-        path_to_plot = os.path.join(self.metrics_path, plot_name)
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
         plt.savefig(path_to_plot)
 
     def num_epochs_per_experience(self):
@@ -65,7 +66,7 @@ class Metrics():
         bars = plt.bar(summary['strategy'], summary['mean'], yerr=summary['std'], capsize=7, color='skyblue', edgecolor='black')
 
         # Adding titles and labels
-        plt.title('Mean and Standard Deviation of number of epochs to convergence')
+        plt.title(f'Mean and Standard Deviation of number of epochs to convergence for {self.benchmark_name} benchmark')
         plt.xlabel('Strategy')
         plt.ylabel('Number of epochs')
 
@@ -75,7 +76,8 @@ class Metrics():
                         xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
 
         # Show plot
-        plt.savefig(os.path.join(self.metrics_path, f"strategies_{self.group_name}.png"))
+        save_path = os.path.join(self.metrics_path, f'strategies_{self.group_name.replace("/", "-").replace(":", "-")}.png')
+        plt.savefig(save_path)
 
         # Print the summary DataFrame
         if print_plot:
@@ -147,7 +149,7 @@ class Metrics():
         return data
 
 
-    def extract_system_metrics(self, metric, description):
+    def extract_system_metrics(self, metric, description, interpolation_limit_system_metrics):
         data = self.save_metrics_xlsx()
         # Create a helper column to detect changes in strategy_name
         data['index_run'] = data.groupby("run_id").cumcount()
@@ -162,8 +164,8 @@ class Metrics():
         pivot_table_std = df_std.pivot(index='_step', columns='strategy_name', values=metric)
 
         # akima for gpu.0.gpu and cpu, linear for gpu.0.temp
-        pivot_table.interpolate(method='linear', inplace=True, limit=20)
-        pivot_table_std.interpolate(method='linear', inplace=True, limit=20)
+        pivot_table.interpolate(method='akima', inplace=True, limit=interpolation_limit_system_metrics)
+        pivot_table_std.interpolate(method='akima', inplace=True, limit=interpolation_limit_system_metrics)
         
         # Plotting
         pivot_table.drop(columns="the_index", inplace=True)
@@ -191,18 +193,18 @@ class Metrics():
         # Adding labels and title
         plt.xlabel('Runtime (h)')
         plt.ylabel(f'Mean {description}')
-        plt.title(f'Mean {description} with Standard Deviation for Different Strategies')
+        plt.title(f'Mean {description} with Standard Deviation for Different Strategies for {self.benchmark_name} benchmark')
         plt.legend()
         
-        self.save_plot(description)
+        self.save_plot(description.replace("(%)", ""))
         # wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
-    def extract_system_metrics_all(self):
+    def extract_system_metrics_all(self, interpolation_limit_system_metrics):
         all = {"system.gpu.0.powerWatts": "GPU Power Usage (W)", "system.gpu.0.gpu": "GPU Utilization",\
                           "system.gpu.0.temp": "GPU Temperature (°C)", "system.cpu": "CPU Utilization (%)",\
                             "system.memory": "System Memory Utilization (%)"}
         for metric, description in all.items():
-            self.extract_system_metrics(metric, description)
+            self.extract_system_metrics(metric, description, interpolation_limit_system_metrics)
 
 
     def extract_energy_consumption(self):
@@ -267,7 +269,7 @@ class Metrics():
         plt.xlabel('Strategy')
         plt.ylabel('Energy (MJ)')
         description = 'GPU energy used for training for different strategies'
-        plt.title(description)
+        plt.title(f"{description} for {self.benchmark_name} benchmark")
         plt.xticks(rotation=45, ha='right')
 
         # Adding text labels above the bars
@@ -281,7 +283,7 @@ class Metrics():
         plt.tight_layout()
         
         description = " ".join(description.split()[:2])
-        self.save_plot(description)
+        self.save_plot(description.replace("/", "-").replace(":", "-"))
         # wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
 if __name__ == "__main__":
@@ -290,10 +292,12 @@ if __name__ == "__main__":
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
     group_names = config.get("wandb_metrics_extraction").get("group_names")
+    interpolation_limit_system_metrics = 60
+    interpolation_limit_energy_consumption = 30
     for group_name in group_names:
         metrics = Metrics(config, group_name)
         metrics.extract_convergence()
-        metrics.extract_system_metrics_all()
+        metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
         metrics.extract_energy_consumption()
         # metrics.extract_system_metrics("system.gpu.0.powerWatts", "GPU Power Usage (W)")
         wandb.finish()
