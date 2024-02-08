@@ -151,24 +151,14 @@ class Metrics():
 
     def extract_system_metrics(self, metric, description, interpolation_limit_system_metrics):
         data = self.save_metrics_xlsx()
-        # Create a helper column to detect changes in strategy_name
-        data['index_run'] = data.groupby("run_id").cumcount()
-
-        df_mean = data.groupby(["strategy_name", "index_run"])[[metric, "_runtime"]].mean().reset_index()
-        df_std = data.groupby(["strategy_name", "index_run"])[metric].std().reset_index()
-        df_std['_step'] = data.groupby(["strategy_name", "index_run"])["_runtime"].mean().reset_index()["_runtime"]
-
+        data['_runtime'] = data['_runtime'].round()
+        df_mean = data.groupby(["strategy_name", "_runtime"])[metric].mean().reset_index()
+        df_std = data.groupby(["strategy_name", "_runtime"])[metric].std().reset_index()
         # Pivot data to have strategies as columns
         pivot_table = df_mean.pivot(index='_runtime', columns='strategy_name', values=metric)
-        pivot_table['the_index'] = range(len(pivot_table))
-        pivot_table_std = df_std.pivot(index='_step', columns='strategy_name', values=metric)
-
-        # akima for gpu.0.gpu and cpu, linear for gpu.0.temp
-        pivot_table.interpolate(method='akima', inplace=True, limit=interpolation_limit_system_metrics)
-        pivot_table_std.interpolate(method='akima', inplace=True, limit=interpolation_limit_system_metrics)
-        
-        # Plotting
-        pivot_table.drop(columns="the_index", inplace=True)
+        pivot_table_std = df_std.pivot(index='_runtime', columns='strategy_name', values=metric)
+        pivot_table.interpolate(method='linear', inplace=True, limit=interpolation_limit_system_metrics)
+        pivot_table_std.interpolate(method='linear', inplace=True, limit=interpolation_limit_system_metrics)
 
         plt.figure(figsize=(12, 6))
 
@@ -292,14 +282,13 @@ if __name__ == "__main__":
     config_path = os.path.join(main_path, "config.yaml")
     config = Config(config_path)
     group_names = config.get("wandb_metrics_extraction").get("group_names")
-    interpolation_limit_system_metrics = 60
-    interpolation_limit_energy_consumption = 30
+    interpolation_limit_system_metrics = 10
+    interpolation_limit_energy_consumption = 10
     for group_name in group_names:
         metrics = Metrics(config, group_name)
         metrics.extract_convergence()
         metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
         metrics.extract_energy_consumption()
-        # metrics.extract_system_metrics("system.gpu.0.powerWatts", "GPU Power Usage (W)")
         wandb.finish()
 
     # Call method for appropriate metrics extraction
