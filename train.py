@@ -9,7 +9,6 @@ from data_loader import DataLoader
 from models import SimpleCNNGrayScale, SimpleCNNWithBN, ClassifierCNN2D
 from RMNPlugin import RMNPlugin, argsRMN
 from utils import *
-
 import torch.nn as nn
 import math
 
@@ -104,8 +103,8 @@ class Trainer():
         fraction_to_take = self.config.get("dataset").get("fraction_to_take")
         eval_every = self.config.get("training").get("eval_every")
         patience = self.config.get("training").get("patience")
-        #strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "RMN": RelevanceMappingNetworks, "Cumulative": Cumulative}
-        strategies = {"Naive": Naive, "RMN": Naive, "Cumulative": Cumulative}
+        strategies = {"Naive": Naive, "CWR*": CWRStar, "GEM": GEM, "EWC": EWC, "GR": GenerativeReplay, "RMN": Naive, "Cumulative": Cumulative}
+        strategies = {"RMN": Naive}
         benchmarks = self.generate_benchmarks_list()
         for dataset, scenario in benchmarks:
             train_stream, val_stream, test_stream = self.get_dataset(dataset, scenario)

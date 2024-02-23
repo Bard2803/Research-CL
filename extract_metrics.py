@@ -1,6 +1,6 @@
+import os
 from config import Config
 import wandb
-import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -26,11 +26,6 @@ class Metrics():
             # Create the folder if it does not exist
             os.makedirs(folder_path)
         return folder_path
-    
-    def save_plot(self, description):
-        plot_name =  description + " " + self.group_name + ".png"
-        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
-        plt.savefig(path_to_plot)
 
     def num_epochs_per_experience(self):
         df = pd.DataFrame()
@@ -58,7 +53,7 @@ class Metrics():
         print("COUNTS", df.head(10))
         history.to_excel(os.path.join(self.metrics_path, "convergence_output.xlsx"))
 
-        return num_runs, df
+        return df
     
     def plot_bar_chart(self, summary, print_plot=False):
         # Plot
@@ -84,7 +79,7 @@ class Metrics():
             print(summary)
         
     
-    def calculate_convergence(self, num_runs, df):
+    def calculate_convergence(self, df):
         strategies = ["Cumulative", "GR", "EWC", "GEM", "CWR*", "Naive"]
         # Calculate the mean and standard deviation for each strategy
         columns = ['strategy', 'mean', 'std']
@@ -98,39 +93,14 @@ class Metrics():
             std = values.std()
             summary = pd.concat([summary, pd.DataFrame([{"strategy": strategy, "mean": mean, "std": std}])], ignore_index=True)
 
-        #     # For number of epochs
-        #     strategy_data = []
-        #     for i in range(num_runs):
-        #         Cumulative = f'{strategy}{i}'
-        #         if Cumulative in df:
-        #             strategy_data.extend(df[Cumulative])
-        #     plt.plot(range(len(strategy_data)), strategy_data, marker='o', label=strategy)
-
-        # # For number of epochs
-        # # plt.axhline(y=PATIENCE, color='red', linewidth=2, linestyle='--', label='Patience')
-        # plt.xlabel('Experience')
-        # plt.ylabel('Number of epochs')
-        # plt.title('Number of epochs in each experience for class incremental scenario')
-        # # Set custom tick labels
-        # total_iterations = num_runs * 10  # 10 runs, 10 counts for each experience
-        # tick_positions = list(range(total_iterations))
-        # tick_labels = [str(i % 10) for i in range(total_iterations)]
-        # plt.xticks(tick_positions, tick_labels)
-        # plt.xticks(range(len(strategy_data)))
-        # plt.legend()
-
-        # # Show plot
-        # plt.tight_layout()
-        # plt.grid(True)
-        # plt.savefig(os.path.join(self.metrics_path, "epochs.png"))
         self.plot_bar_chart(summary)
         wandb.finish()
         print("finished extracting convergence")
 
 
     def extract_convergence(self):
-        num_runs, df = self.num_epochs_per_experience()
-        self.calculate_convergence(num_runs, df)
+        df = self.num_epochs_per_experience()
+        self.calculate_convergence(df)
 
     
     def save_metrics_xlsx(self):
@@ -144,10 +114,24 @@ class Metrics():
             data = pd.concat([data, history], ignore_index=True)
 
         data.to_excel(os.path.join(self.metrics_path, "system_metrics.xlsx"), index=False)
-        data = data.interpolate()
+        data = data.infer_objects(copy=False).interpolate()
+        # data = data.interpolate()
 
         return data
 
+    def mean_total(self, pivot_table, pivot_table_std, description):
+        description = "Mean " + description + " for different strategies"
+        total_mean = pivot_table.mean()
+        total_std = pivot_table_std.mean()
+        # Plot bar chart for total mean and standard deviation
+        plt.figure(figsize=(10, 5))
+        plt.bar(pivot_table.columns, total_mean, yerr=total_std, capsize=7, color='skyblue', edgecolor='black')
+        plt.xlabel('Strategy')
+        plt.ylabel(description)
+        plt.title(f"{description} for {self.benchmark_name} benchmark")
+        plot_name =  description + " " + self.group_name + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        plt.savefig(path_to_plot)
 
     def extract_system_metrics(self, metric, description, interpolation_limit_system_metrics):
         data = self.save_metrics_xlsx()
@@ -157,8 +141,12 @@ class Metrics():
         # Pivot data to have strategies as columns
         pivot_table = df_mean.pivot(index='_runtime', columns='strategy_name', values=metric)
         pivot_table_std = df_std.pivot(index='_runtime', columns='strategy_name', values=metric)
-        pivot_table.interpolate(method='linear', inplace=True, limit=interpolation_limit_system_metrics)
-        pivot_table_std.interpolate(method='linear', inplace=True, limit=interpolation_limit_system_metrics)
+        pivot_table = pivot_table.infer_objects(copy=False).interpolate(method='linear', limit=interpolation_limit_system_metrics)
+        pivot_table_std = pivot_table_std.infer_objects(copy=False).interpolate(method='linear', limit=interpolation_limit_system_metrics)
+        # pivot_table.interpolate(method='linear', inplace=True, limit=interpolation_limit_system_metrics)
+        # pivot_table_std.interpolate(method='linear', inplace=True, limit=interpolation_limit_system_metrics)
+
+        self.mean_total(pivot_table, pivot_table_std, description)
 
         plt.figure(figsize=(12, 6))
 
@@ -186,11 +174,15 @@ class Metrics():
         plt.title(f'Mean {description} with Standard Deviation for Different Strategies for {self.benchmark_name} benchmark')
         plt.legend()
         
-        self.save_plot(description.replace("(%)", ""))
+
+        plot_name =  description.replace("(%)", "") + " " + self.group_name + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        plt.savefig(path_to_plot)
+
         # wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
     def extract_system_metrics_all(self, interpolation_limit_system_metrics):
-        all = {"system.gpu.0.powerWatts": "GPU Power Usage (W)", "system.gpu.0.gpu": "GPU Utilization",\
+        all = {"system.gpu.0.powerWatts": "GPU Power Usage (W)", "system.gpu.0.gpu": "GPU Utilization (%)",\
                           "system.gpu.0.temp": "GPU Temperature (°C)", "system.cpu": "CPU Utilization (%)",\
                             "system.memory": "System Memory Utilization (%)"}
         for metric, description in all.items():
@@ -211,10 +203,12 @@ class Metrics():
 
         # Pivot data to have strategies as columns
         pivot_table = df_mean.pivot(index='mean_runtime', columns='strategy_name', values='mean_metric')
-        pivot_table.interpolate(inplace=True, limit=30)
+        data = data.infer_objects(copy=False).interpolate(inplace=True, limit=30)
+        # pivot_table.interpolate(inplace=True, limit=30)
 
         pivot_table_std = df_mean.pivot(index='mean_runtime', columns='strategy_name', values='std_metric')
-        pivot_table_std.interpolate(inplace=True, limit=30)
+        data = data.infer_objects(copy=False).interpolate(inplace=True, limit=30)
+        # pivot_table_std.interpolate(inplace=True, limit=30)
 
         # Lists to store area and standard deviation values
         energy_list = []
@@ -259,7 +253,7 @@ class Metrics():
         plt.xlabel('Strategy')
         plt.ylabel('Energy (MJ)')
         description = 'GPU energy used for training for different strategies'
-        plt.title(f"{description} for {self.benchmark_name} benchmark")
+        plt.title(f"{description} for {self.benchmark_name} benchmark")        
         plt.xticks(rotation=45, ha='right')
 
         # Adding text labels above the bars
@@ -273,7 +267,11 @@ class Metrics():
         plt.tight_layout()
         
         description = " ".join(description.split()[:2])
-        self.save_plot(description.replace("/", "-").replace(":", "-"))
+        plot_name =  description + " " + self.group_name + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        plt.savefig(path_to_plot)
+
+        
         # wandb.log({plot_name[:-4]: wandb.Image(path_to_plot)}, commit=True)
 
 if __name__ == "__main__":
@@ -286,9 +284,9 @@ if __name__ == "__main__":
     interpolation_limit_energy_consumption = 10
     for group_name in group_names:
         metrics = Metrics(config, group_name)
-        metrics.extract_convergence()
+        # metrics.extract_convergence()
         metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
-        metrics.extract_energy_consumption()
+        # metrics.extract_energy_consumption()
         wandb.finish()
 
     # Call method for appropriate metrics extraction
