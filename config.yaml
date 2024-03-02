@@ -31,4 +31,5 @@ wandb:
 
 wandb_metrics_extraction:
   folder_name: "metrics_extraction"
-  group_names: ["splitcifar10_02/03/2024, 05:13", "splitmnist_02/03/2024, 01:04", "core50_ni_02/02/2024, 15:44", "core50_nc_01/31/2024, 21:35"]
+  strategies: ["Cumulative", "RMN", "GR", "EWC", "GEM", "CWR*", "Naive"]
+  group_names: ["splitcifar10_02-28-2024 21-57", "splitmnist_02-28-2024 18-39", "core50_ni_02-28-2024 10-32", "core50_nc_02-27-2024 18-13"]

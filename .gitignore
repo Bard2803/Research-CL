@@ -98,4 +98,4 @@ wandb/
 .gitignore
 .vscode/*
 metrics_extraction/
-RMN_RMN_save_0.pt
+RMN_RMN_save*

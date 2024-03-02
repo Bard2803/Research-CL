@@ -247,6 +247,8 @@ class ClassifierCNN2D(nn.Module):
         :param keep_prob:
         :param image_size:
         """
+        self.nTasks = tasks
+        
         self.conv1 = AConv2d(num_channels, layer_size, 3, 1, 1, datasets=tasks)
         self.conv2 = AConv2d(layer_size, layer_size, 3, 1, 1, datasets=tasks)
         self.conv3 = AConv2d(layer_size, layer_size, 3, 1, 1, datasets=tasks)
