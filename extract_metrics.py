@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime
 
 class Metrics():
-    def __init__(self, config):
+    def __init__(self, config, group_name):
         wandb.login()
         api = wandb.Api()
         self.config = config
@@ -35,12 +35,12 @@ class Metrics():
         strategy_names = []
         num_experiences = self.config.get("scenario").get("num_experiences")
         # Fetch the logged metrics for each run
-        for num_runs, run in enumerate(self.runs, 1):
+        for run in self.runs:
             history = run.history()
             history = pd.DataFrame(history)
             counts = [] 
             strategy_names.append(run.name)
-            for index, row in history.iterrows():
+            for _, row in history.iterrows():
                 if not np.isnan(row['TrainingExperience']):
                     counter += 1
                     # Append the count to the list and reset the counter
@@ -51,10 +51,45 @@ class Metrics():
             while len(counts) != num_experiences:
                 counts.append(sum(counts)/len(counts))
             df[run.name + str(strategy_names.count(run.name))] = counts
-        print("COUNTS", df.head(10))
         history.to_excel(os.path.join(self.metrics_path, "convergence_output.xlsx"))
-
         return df
+    
+    def calculate_convergence(self, df):
+        strategies = self.config.get("wandb_metrics_extraction").get("strategies")
+        # Calculate the mean and standard deviation for each strategy
+        columns = ['strategy', 'mean', 'std']
+        summary = pd.DataFrame(columns=columns)
+        for strategy in strategies:
+            # For mean and standard deviation of sum of epochs
+            columns = [col for col in df.columns if col.startswith(strategy)]
+            strategy_data = df[columns]
+            values = strategy_data.values
+            mean = values.mean()
+            std = values.std()
+            summary = pd.concat([summary, pd.DataFrame([{"strategy": strategy, "mean": mean, "std": std}])], ignore_index=True)
+        self.plot_bar_chart(summary)
+        wandb.finish()
+        print("finished extracting convergence")
+        return summary
+
+    def extract_convergence(self):
+        df = self.num_epochs_per_experience()
+        df = self.calculate_convergence(df)
+        return df
+ 
+    def save_metrics_xlsx(self):
+        data = pd.DataFrame()
+        # Fetch the logged metrics for each run
+        for run in self.runs:
+            history = run.history(stream="system")
+            history['run_id'] = run.id
+            history['strategy_name'] = run.name
+            data = pd.concat([data, history], ignore_index=True)
+
+        data.to_excel(os.path.join(self.metrics_path, "system_metrics.xlsx"), index=False)
+        data = data.infer_objects(copy=False).interpolate()
+        # data = data.interpolate()
+        return data
     
     def plot_bar_chart(self, summary, print_plot=False):
         # Plot
@@ -78,53 +113,16 @@ class Metrics():
         # Print the summary DataFrame
         if print_plot:
             print(summary)
-        
-    
-    def calculate_convergence(self, df):
-        strategies = self.config.get("wandb_metrics_extraction").get("strategies")
-        # Calculate the mean and standard deviation for each strategy
-        columns = ['strategy', 'mean', 'std']
-        summary = pd.DataFrame(columns=columns)
-        for strategy in strategies:
-            # For mean and standard deviation of sum of epochs
-            columns = [col for col in df.columns if col.startswith(strategy)]
-            strategy_data = df[columns]
-            values = strategy_data.values
-            mean = values.mean()
-            std = values.std()
-            summary = pd.concat([summary, pd.DataFrame([{"strategy": strategy, "mean": mean, "std": std}])], ignore_index=True)
-
-        self.plot_bar_chart(summary)
-        wandb.finish()
-        print("finished extracting convergence")
-        return summary
-
-    def extract_convergence(self):
-        df = self.num_epochs_per_experience()
-        df = self.calculate_convergence(df)
-        return df
- 
-    def save_metrics_xlsx(self):
-        data = pd.DataFrame()
-
-        # Fetch the logged metrics for each run
-        for run in self.runs:
-            history = run.history(stream="system")
-            history['run_id'] = run.id
-            history['strategy_name'] = run.name
-            data = pd.concat([data, history], ignore_index=True)
-
-        data.to_excel(os.path.join(self.metrics_path, "system_metrics.xlsx"), index=False)
-        data = data.infer_objects(copy=False).interpolate()
-        # data = data.interpolate()
-        return data
 
     def bar_plot_total_mean(self, total_mean, total_std, columns, description):
         description = "Mean " + description + " for different strategies"
         
         # Plot bar chart for total mean and standard deviation
         plt.figure(figsize=(10, 5))
-        plt.bar(columns, total_mean, yerr=total_std, capsize=7, color='skyblue', edgecolor='black')
+        bars = plt.bar(columns, total_mean, yerr=total_std, capsize=7, color='skyblue', edgecolor='black')
+        for bar, value in zip(bars, total_mean):
+            plt.annotate(f'{value:.2f}', xy=(bar.get_x() + bar.get_width() / 3, value),
+                        xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
         plt.xlabel('Strategy')
         plt.ylabel(description)
         plt.title(f"{description} for {self.benchmark_name} benchmark")
@@ -201,6 +199,7 @@ class Metrics():
         self.bar_plot_runtime(runtime, columns)
         self.plot_extract_system_metrics(pivot_table, pivot_table_std, description)
 
+        # TODO check why runtime is the same each iteration
         return total_mean, total_std, runtime
 
     def extract_system_metrics_all(self, interpolation_limit_system_metrics):
@@ -337,13 +336,44 @@ class Metrics_across_all_benchmarks(Metrics):
         if print_plot:
             print(summary)
 
+    def bar_plot_total_mean(self, total_mean, total_std, columns, description):
+        description = "Mean " + description 
+        
+        # Plot bar chart for total mean and standard deviation
+        plt.figure(figsize=(10, 5))
+        bars = plt.bar(columns, total_mean, yerr=total_std, capsize=7, color='skyblue', edgecolor='black')
+        for bar, value in zip(bars, total_mean):
+            plt.annotate(f'{value:.2f}', xy=(bar.get_x() + bar.get_width() / 3, value),
+                        xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
+        plt.xlabel('Strategy')
+        plt.ylabel(description)
+        plt.title(f"{description} for different strategies")
+        plot_name =  description + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        plt.savefig(path_to_plot)
+        plt.close()
+
+    def bar_plot_runtime(self, runtime, columns):
+        description = "Runtime for different strategies across all benchmarks"
+        plt.figure(figsize=(10, 5))
+        # Create an array with the positions of each bar along the x-axis
+        plt.bar(columns, runtime, color='orange', edgecolor='black', label='Runtime Mean (h)')
+        plt.xlabel('Strategy')
+        plt.ylabel(description)
+        plt.title(f"{description} for different strategies")
+        plt.legend()  # Add a legend
+        plot_name =  description +  + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        plt.savefig(path_to_plot)
+        plt.close()
+
     def concat_convergence(self, df):
-        self.df_convergence = pd.concat([self.df_convergence, df], ignore_index=True)
+        self.df_convergence = pd.concat([self.df_convergence, df.reset_index()], ignore_index=True)
     
-    def concat_system_metrics(self, total_mean, total_std):
+    def concat_system_metrics(self, total_mean, total_std, runtime):
         self.df_system_metrics = pd.concat([self.df_system_metrics, total_mean.reset_index()], ignore_index=True)
         self.df_system_metrics_std = pd.concat([self.df_system_metrics, total_std.reset_index()], ignore_index=True)
-        self.df_runtime = pd.concat([self.df_system_metrics, total_std], ignore_index=True)
+        self.df_runtime = pd.concat([self.df_runtime, runtime.reset_index()], ignore_index=True)
     
     def concat_energy_consumption(self, df):
         self.df_energy_consumption = pd.concat([self.df_convergence, df], ignore_index=True)
@@ -357,11 +387,14 @@ class Metrics_across_all_benchmarks(Metrics):
         total_std = self.df_system_metrics_std.groupby("index").mean()
         bars = total_mean.index
         # TODO TBC
-        for (_, mean), (_, std) in zip(total_mean.iteritems(), total_std.iteritems()):
-            description = mean.name + " for different benchmarks"
-            super().bar_plot_total_mean(mean, std, bars, description)
+        for (_, mean), (_, std) in zip(total_mean.items(), total_std.items()):
+            description = mean.name + " across different benchmarks"
+            self.bar_plot_total_mean(mean, std, bars, description)
         # TODO do the same for runtime
-        runtime = self.df_runtime.mean()
+        runtimes = self.df_runtime.mean()
+        for runtime in runtimes.items():
+            description = mean.name + " across different benchmarks"
+            self.bar_plot_runtime(mean, runtime, bars)
 
 if __name__ == "__main__":
     main_path = os.path.dirname(os.path.abspath(__file__))
@@ -372,11 +405,11 @@ if __name__ == "__main__":
     interpolation_limit_system_metrics = 10
     interpolation_limit_energy_consumption = 10
     for group_name in group_names:
-        metrics = Metrics(config)
+        metrics = Metrics(config, group_name)
         df = metrics.extract_convergence()
         metrics_aab.concat_convergence(df)
-        total_mean, total_std, df_runtime = metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
-        metrics_aab.concat_system_metrics(total_mean, total_std)
+        total_mean, total_std, runtime = metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
+        metrics_aab.concat_system_metrics(total_mean, total_std, runtime)
         # TODO do the same for energy consumption
         # metrics.extract_energy_consumption()
         
