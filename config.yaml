@@ -1,11 +1,11 @@
 training:
   # 0.001
   learning_rate: 0.001
-  epochs: 200
+  epochs: 36
   # 128
   batch_size: 128
   patience: 25
-  num_runs: 2
+  num_runs: 10
   eval_every: 2
   es_metric: ["Top1_Acc_Stream", "Loss_Stream"]
 
@@ -26,10 +26,10 @@ scenario:
   num_experiences: 10
 
 wandb:
-  project_name: "CL-Research"
+  project_name: "CL-Research-Training"
   entity: "Bard"
 
 wandb_metrics_extraction:
   folder_name: "metrics_extraction"
   strategies: ["Cumulative", "RMN", "GR", "EWC", "GEM", "CWR*", "Naive"]
-  group_names: ["splitcifar10_02-28-2024 21-57", "splitmnist_02-28-2024 18-39", "core50_ni_02-28-2024 10-32", "core50_nc_02-27-2024 18-13"]
+  group_names: ["splitcifar10_04-18-2024 19-30", "splitmnist_04-11-2024 18-31", "core50_ni_04-09-2024 03-35", "core50_nc_04-04-2024 22-58"]

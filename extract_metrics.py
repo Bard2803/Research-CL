@@ -16,7 +16,7 @@ class Metrics():
         # wandb.init(project=project_name, group=group_name)
         self.runs = api.runs(project_name, filters = {"group": self.group_name})
         folder_name = config.get("wandb_metrics_extraction").get("folder_name")
-        self.metrics_path = self.create_folder(folder_name)
+        self.metrics_path = self.create_folder(os.path.join(folder_name, "individual_benchmarks"))
         self.benchmark_name  = group_name.split("_")[:-1][0]
 
     def create_folder(self, folder_name):
@@ -36,22 +36,25 @@ class Metrics():
         num_experiences = self.config.get("scenario").get("num_experiences")
         # Fetch the logged metrics for each run
         for run in self.runs:
+            # There is discrepancy in the convergence, because the history of wandb is downloaded with  
+            # different number of epochs for each experience. 
             history = run.history()
             history = pd.DataFrame(history)
             counts = [] 
             strategy_names.append(run.name)
+            # Uncomment if want to print the history for each run
+            # history.to_excel(os.path.join(self.metrics_path, "analysis_convergence_discrepancy", f"{run.name + str(strategy_names.count(run.name))}.xlsx"))
             for _, row in history.iterrows():
-                if not np.isnan(row['TrainingExperience']):
+                if np.isnan(row['TrainingExperience']):
+                    counter += 1
+                else:
                     counter += 1
                     # Append the count to the list and reset the counter
                     counts.append(counter)
                     counter = 0
-                else:
-                    counter += 1
-            while len(counts) != num_experiences:
+            while len(counts) < num_experiences:
                 counts.append(sum(counts)/len(counts))
             df[run.name + str(strategy_names.count(run.name))] = counts
-        history.to_excel(os.path.join(self.metrics_path, "convergence_output.xlsx"))
         return df
     
     def calculate_convergence(self, df):
@@ -86,7 +89,7 @@ class Metrics():
             history['strategy_name'] = run.name
             data = pd.concat([data, history], ignore_index=True)
 
-        data.to_excel(os.path.join(self.metrics_path, "system_metrics.xlsx"), index=False)
+        data.to_excel(os.path.join(self.metrics_path, f"system_metrics_{self.group_name}.xlsx"), index=False)
         data = data.infer_objects(copy=False).interpolate()
         # data = data.interpolate()
         return data
@@ -214,11 +217,13 @@ class Metrics():
             total_mean.name, total_std.name = description, description
             df_total_mean = pd.concat([df_total_mean, total_mean], axis=1)
             df_total_std = pd.concat([df_total_std, total_std], axis=1)
-            df_runtime = pd.concat([df_runtime, runtime], axis=1)
+            # Runtime shouldnt be concatenated, because it is the same each iteration above
+            # Therefore the last runtime can be returned and it is OK
+        df_runtime = runtime
         return df_total_mean, df_total_std, df_runtime
 
 
-    def extract_energy_consumption(self):
+    def extract_energy_consumption(self, interpolation_limit_energy_consumption):
         data = self.save_metrics_xlsx()
 
         # Create a helper column to detect changes in strategy_name
@@ -232,12 +237,12 @@ class Metrics():
 
         # Pivot data to have strategies as columns
         pivot_table = df_mean.pivot(index='mean_runtime', columns='strategy_name', values='mean_metric')
-        data = data.infer_objects(copy=False).interpolate(inplace=True, limit=30)
-        # pivot_table.interpolate(inplace=True, limit=30)
+        # data = data.infer_objects(copy=False).interpolate(inplace=True, limit=interpolation_limit_energy_consumption)
+        pivot_table.interpolate(inplace=True, limit=interpolation_limit_energy_consumption)
 
         pivot_table_std = df_mean.pivot(index='mean_runtime', columns='strategy_name', values='std_metric')
-        data = data.infer_objects(copy=False).interpolate(inplace=True, limit=30)
-        # pivot_table_std.interpolate(inplace=True, limit=30)
+        # data = data.infer_objects(copy=False).interpolate(inplace=True, limit=interpolation_limit_energy_consumption)
+        pivot_table_std.interpolate(inplace=True, limit=interpolation_limit_energy_consumption)
 
         # Lists to store area and standard deviation values
         energy_list = []
@@ -252,20 +257,25 @@ class Metrics():
             x_stds = stds.index
             
             # Calculate area under the curve using the trapezoidal rule
-            energy = np.trapz(means, x) / 1e6
-            std_dev = np.trapz(stds, x_stds)
+            division_fac = 1e3
+            energy = np.trapz(means, x) / division_fac
+            std_dev = np.trapz(stds, x_stds) / division_fac
             
             # Append area and standard deviation values to the lists
             energy_list.append(energy)
             std_devs.append(std_dev)
 
         # Create a DataFrame to hold the data for the bar plot
-        bar_data = pd.DataFrame({
+        energy_consumption = pd.DataFrame({
             'Strategy': pivot_table.columns,
             'Area': energy_list,
             'Std Dev': std_devs
         })
+        self.plot_energy_consumption(energy_consumption, division_fac)
+        return energy_consumption
 
+
+    def plot_energy_consumption(self, bar_data, division_fac, benchmarks=''):
         # Sort bar_data in descending order based on 'Area'
         bar_data = bar_data.sort_values(by='Area', ascending=False)
 
@@ -277,17 +287,18 @@ class Metrics():
 
         # Bar plot for energy_list and standard deviations
         plt.bar(bar_data['Strategy'], bar_data['Area'], capsize=5)
-
+        
+        unit = {1: "J", 1e3: "kJ", 1e6: "MJ", 1e9: "GJ"}
         # Adding labels and title
         plt.xlabel('Strategy')
-        plt.ylabel('Energy (MJ)')
-        description = 'GPU energy used for training for different strategies'
+        plt.ylabel(f'Energy ({unit[division_fac]})')
+        description = f'GPU energy used for training for different strategies{benchmarks}'
         plt.title(f"{description} for {self.benchmark_name} benchmark")        
         plt.xticks(rotation=45, ha='right')
 
         # Adding text labels above the bars
         for bar, energy in zip(bars, bar_data['Area']):
-            plt.annotate(f'{energy:.2f} MJ', # Text label
+            plt.annotate(f'{energy:.2f} {unit[division_fac]}', # Text label
                         xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()), # Position
                         xytext=(0, 3),  # Offset from the top of the bar
                         textcoords='offset points',
@@ -312,7 +323,7 @@ class Metrics_across_all_benchmarks(Metrics):
         self.df_runtime = pd.DataFrame()
         self.df_energy_consumption = pd.DataFrame()
         folder_name = config.get("wandb_metrics_extraction").get("folder_name")
-        self.metrics_path = self.create_folder(folder_name)
+        self.metrics_path = self.create_folder(os.path.join(folder_name, "across_all_benchmarks"))
 
     def plot_bar_chart(self, summary, print_plot=False):
         plt.figure(figsize=(10, 5)) 
@@ -372,11 +383,11 @@ class Metrics_across_all_benchmarks(Metrics):
     
     def concat_system_metrics(self, total_mean, total_std, runtime):
         self.df_system_metrics = pd.concat([self.df_system_metrics, total_mean.reset_index()], ignore_index=True)
-        self.df_system_metrics_std = pd.concat([self.df_system_metrics, total_std.reset_index()], ignore_index=True)
+        self.df_system_metrics_std = pd.concat([self.df_system_metrics_std, total_std.reset_index()], ignore_index=True)
         self.df_runtime = pd.concat([self.df_runtime, runtime.reset_index()], ignore_index=True)
     
     def concat_energy_consumption(self, df):
-        self.df_energy_consumption = pd.concat([self.df_convergence, df], ignore_index=True)
+        self.df_energy_consumption = pd.concat([self.df_energy_consumption, df], ignore_index=True)
     
     def extract_convergence(self):
         df = self.df_convergence.groupby("strategy").mean().reset_index()
@@ -390,11 +401,15 @@ class Metrics_across_all_benchmarks(Metrics):
         for (_, mean), (_, std) in zip(total_mean.items(), total_std.items()):
             description = mean.name + " across different benchmarks"
             self.bar_plot_total_mean(mean, std, bars, description)
-        # TODO do the same for runtime
-        runtimes = self.df_runtime.mean()
+        # TODO WHole below code to manage. Include means and the stds. Now only means are heregit stat
+        runtimes = self.df_runtime.groupby("strategy_name").mean()
         for runtime in runtimes.items():
             description = mean.name + " across different benchmarks"
-            self.bar_plot_runtime(mean, runtime, bars)
+            self.bar_plot_runtime(runtime, bars)
+
+    def extract_energy_consumption(self):
+        energy_consumption= self.df_energy_consumption.groupby("Strategy").mean()
+        self.plot_energy_consumption(energy_consumption, 1e6, " across different benchmarks")
 
 if __name__ == "__main__":
     main_path = os.path.dirname(os.path.abspath(__file__))
@@ -411,11 +426,13 @@ if __name__ == "__main__":
         total_mean, total_std, runtime = metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
         metrics_aab.concat_system_metrics(total_mean, total_std, runtime)
         # TODO do the same for energy consumption
-        # metrics.extract_energy_consumption()
+        df = metrics.extract_energy_consumption(interpolation_limit_energy_consumption)
+        metrics_aab.concat_energy_consumption(df)
         
         wandb.finish()
     metrics_aab.extract_convergence()
     metrics_aab.extract_system_metrics()
+    metrics_aab.extract_energy_consumption()
     
 
     # Call method for appropriate metrics extraction
