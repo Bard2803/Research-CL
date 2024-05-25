@@ -275,7 +275,7 @@ class Metrics():
         return energy_consumption
 
 
-    def plot_energy_consumption(self, bar_data, division_fac, benchmarks=''):
+    def plot_energy_consumption(self, bar_data, division_fac, additional_desc=''):
         # Sort bar_data in descending order based on 'Area'
         bar_data = bar_data.sort_values(by='Area', ascending=False)
 
@@ -292,7 +292,7 @@ class Metrics():
         # Adding labels and title
         plt.xlabel('Strategy')
         plt.ylabel(f'Energy ({unit[division_fac]})')
-        description = f'GPU energy used for training for different strategies{benchmarks}'
+        description = f'GPU energy used for training for different strategies {additional_desc}'
         plt.title(f"{description} for {self.benchmark_name} benchmark")        
         plt.xticks(rotation=45, ha='right')
 
@@ -308,7 +308,7 @@ class Metrics():
         
         description = " ".join(description.split()[:2])
         plot_name =  description + " " + self.group_name + ".png"
-        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-").replace(" ", "_"))
         plt.savefig(path_to_plot)
         plt.close()
 
@@ -360,21 +360,21 @@ class Metrics_across_all_benchmarks(Metrics):
         plt.ylabel(description)
         plt.title(f"{description} for different strategies")
         plot_name =  description + ".png"
-        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-").replace(" ", "_"))
         plt.savefig(path_to_plot)
         plt.close()
 
-    def bar_plot_runtime(self, runtime, columns):
+    def bar_plot_runtime(self, runtimes):
         description = "Runtime for different strategies across all benchmarks"
         plt.figure(figsize=(10, 5))
         # Create an array with the positions of each bar along the x-axis
-        plt.bar(columns, runtime, color='orange', edgecolor='black', label='Runtime Mean (h)')
+        plt.bar(runtimes.index, runtimes, color='orange', edgecolor='black', label='Runtime Mean (h)')
         plt.xlabel('Strategy')
         plt.ylabel(description)
         plt.title(f"{description} for different strategies")
         plt.legend()  # Add a legend
-        plot_name =  description +  + ".png"
-        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-"))
+        plot_name =  description + ".png"
+        path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-").replace(" ", "_"))
         plt.savefig(path_to_plot)
         plt.close()
 
@@ -397,15 +397,13 @@ class Metrics_across_all_benchmarks(Metrics):
         total_mean = self.df_system_metrics.groupby("index").mean()
         total_std = self.df_system_metrics_std.groupby("index").mean()
         bars = total_mean.index
-        # TODO TBC
         for (_, mean), (_, std) in zip(total_mean.items(), total_std.items()):
             description = mean.name + " across different benchmarks"
             self.bar_plot_total_mean(mean, std, bars, description)
-        # TODO WHole below code to manage. Include means and the stds. Now only means are heregit stat
+        # TODO Implement standard deviation
         runtimes = self.df_runtime.groupby("strategy_name").mean()
-        for runtime in runtimes.items():
-            description = mean.name + " across different benchmarks"
-            self.bar_plot_runtime(runtime, bars)
+        runtimes = runtimes.squeeze()
+        self.bar_plot_runtime(runtimes)
 
     def extract_energy_consumption(self):
         energy_consumption= self.df_energy_consumption.groupby("Strategy").mean()
@@ -428,7 +426,6 @@ if __name__ == "__main__":
         # TODO do the same for energy consumption
         df = metrics.extract_energy_consumption(interpolation_limit_energy_consumption)
         metrics_aab.concat_energy_consumption(df)
-        
         wandb.finish()
     metrics_aab.extract_convergence()
     metrics_aab.extract_system_metrics()
