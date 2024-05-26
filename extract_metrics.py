@@ -204,6 +204,72 @@ class Metrics():
 
         # TODO check why runtime is the same each iteration
         return total_mean, total_std, runtime
+    
+    def extract_metrics(self, project_name, metric, description):
+        # Login to the wandb
+        wandb.login()
+        # Extract the metrics from WandB after all the runs
+        api = wandb.Api()
+        runs = api.runs(project_name)
+        # Initialize empty DataFrame
+        data = pd.DataFrame()
+
+        # Fetch the logged metrics for each run
+        for run in runs:
+            history = run.history() # 'default or system'
+            history['run_id'] = run.id
+            history['strategy_name'] = run.name
+            data = pd.concat([data, history], ignore_index=True)
+
+        data.to_excel("metrics.xlsx", index=False)
+
+
+        # Create a helper column to detect changes in strategy_name
+        data['index_run'] = data.groupby("run_id").cumcount()
+        grouped = data.groupby(["strategy_name", "run_id"])
+        data[metric] = grouped[metric].apply(lambda group: group.interpolate())
+        data[metric] = data[metric]*100
+
+        df_mean = data.groupby(["strategy_name", "index_run"])[metric, "_step"].mean().reset_index()
+        df_std = data.groupby(["strategy_name", "index_run"])[metric].std().reset_index()
+        df_std['_step'] = data.groupby(["strategy_name", "index_run"])["_step"].mean().reset_index()["_step"]
+
+        # Pivot data to have strategies as columns
+        pivot_table = df_mean.pivot(index='_step', columns='strategy_name', values=metric)
+        pivot_table_std = df_std.pivot(index='_step', columns='strategy_name', values=metric)
+
+        # linear for test set accuracy, akima for train set accuracy
+        pivot_table.interpolate(method='linear', inplace=True, limit=10)
+        pivot_table_std.interpolate(method='linear', inplace=True, limit=10)
+
+        plt.figure(figsize=(12, 6))
+
+        # Define colors for each strategy
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
+        # Loop through each strategy
+        for i, strategy in enumerate(pivot_table.columns):
+            means = pivot_table[strategy] 
+            stds = pivot_table_std[strategy] 
+            x = pivot_table.index 
+            # Plot means for this strategy with customizations
+            plt.plot(x, means,
+                    label=strategy,
+                    linewidth=2,
+                    color=colors[i % len(colors)])
+            
+            # Add variance as shadowed region
+            plt.fill_between(x, means - stds, means + stds,
+                            color=colors[i % len(colors)], alpha=0.2)
+
+        # Adding labels and title
+        plt.xlabel('iterations')
+        plt.ylabel(f'Mean {description}')
+        plt.title(f'Mean {description} with Standard Deviation for Different Strategies')
+        plt.legend()
+
+        # Show plot
+        plt.show()
 
     def extract_system_metrics_all(self, interpolation_limit_system_metrics):
         df_total_mean = pd.DataFrame()
@@ -221,7 +287,6 @@ class Metrics():
             # Therefore the last runtime can be returned and it is OK
         df_runtime = runtime
         return df_total_mean, df_total_std, df_runtime
-
 
     def extract_energy_consumption(self, interpolation_limit_energy_consumption):
         data = self.save_metrics_xlsx()
@@ -431,6 +496,7 @@ if __name__ == "__main__":
         metrics_aab.concat_system_metrics(total_mean, total_std, runtime)
         df = metrics.extract_energy_consumption(interpolation_limit_energy_consumption)
         metrics_aab.concat_energy_consumption(df)
+        df = metrics
         wandb.finish()
     metrics_aab.extract_convergence()
     metrics_aab.extract_system_metrics()
