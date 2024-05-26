@@ -293,7 +293,14 @@ class Metrics():
         plt.xlabel('Strategy')
         plt.ylabel(f'Energy ({unit[division_fac]})')
         description = f'GPU energy used for training for different strategies {additional_desc}'
-        plt.title(f"{description} for {self.benchmark_name} benchmark")        
+        if additional_desc:
+            plt.title(description + additional_desc)
+            description = " ".join(description.split()[:2])
+            plot_name =  description + " " + additional_desc + ".png"  
+        else:   
+            plt.title(f"{description} for {self.benchmark_name} benchmark")
+            description = " ".join(description.split()[:2])
+            plot_name =  description + " " + self.group_name + ".png"     
         plt.xticks(rotation=45, ha='right')
 
         # Adding text labels above the bars
@@ -306,8 +313,7 @@ class Metrics():
 
         plt.tight_layout()
         
-        description = " ".join(description.split()[:2])
-        plot_name =  description + " " + self.group_name + ".png"
+        
         path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-").replace(" ", "_"))
         plt.savefig(path_to_plot)
         plt.close()
@@ -406,7 +412,7 @@ class Metrics_across_all_benchmarks(Metrics):
         self.bar_plot_runtime(runtimes)
 
     def extract_energy_consumption(self):
-        energy_consumption= self.df_energy_consumption.groupby("Strategy").mean()
+        energy_consumption= self.df_energy_consumption.groupby("Strategy").mean().reset_index()
         self.plot_energy_consumption(energy_consumption, 1e6, " across different benchmarks")
 
 if __name__ == "__main__":
@@ -423,13 +429,9 @@ if __name__ == "__main__":
         metrics_aab.concat_convergence(df)
         total_mean, total_std, runtime = metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
         metrics_aab.concat_system_metrics(total_mean, total_std, runtime)
-        # TODO do the same for energy consumption
         df = metrics.extract_energy_consumption(interpolation_limit_energy_consumption)
         metrics_aab.concat_energy_consumption(df)
         wandb.finish()
     metrics_aab.extract_convergence()
     metrics_aab.extract_system_metrics()
     metrics_aab.extract_energy_consumption()
-    
-
-    # Call method for appropriate metrics extraction
