@@ -1,7 +1,10 @@
 import os
 from config import Config
 import wandb
+import matplotlib
+matplotlib.use('Agg')  # Set the backend to 'Agg' for non-interactive plotting
 import matplotlib.pyplot as plt
+# Now you can create plots, save them to files, etc., without requiring a display.
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -57,6 +60,26 @@ class Metrics():
             df[run.name + str(strategy_names.count(run.name))] = counts
         return df
     
+    def get_accuracies(self):
+        df= pd.DataFrame()
+        # Fetch the logged metrics for each run
+        for run in self.runs:
+            history = run.history()
+            history = pd.DataFrame(history)
+            data = pd.DataFrame()
+            # Test accuracy after final experience (task)
+            try:
+                data['test_accuracy'] =  history['Top1_Acc_Stream/eval_phase/test_stream/Task009'].dropna()
+            except KeyError:
+                data['test_accuracy'] =  history['Top1_Acc_Stream/eval_phase/test_stream/Task000'].dropna()
+            data['strategy_name'] = run.name
+            data = data.groupby("strategy_name").tail(1)
+            df = pd.concat([df, data], ignore_index=True)
+        stats_df = df.groupby('strategy_name')['test_accuracy'].agg(['mean', 'std']).reset_index()
+        stats_df.columns = ['Strategy', 'Mean Accuracy', 'Std Deviation']
+        stats_df = stats_df.sort_values('Mean Accuracy', ascending=False).round(2)
+        return stats_df
+    
     def calculate_convergence(self, df):
         strategies = self.config.get("wandb_metrics_extraction").get("strategies")
         # Calculate the mean and standard deviation for each strategy
@@ -70,6 +93,7 @@ class Metrics():
             mean = values.mean()
             std = values.std()
             summary = pd.concat([summary, pd.DataFrame([{"strategy": strategy, "mean": mean, "std": std}])], ignore_index=True)
+        summary = summary.sort_values(by='mean', ascending=False)
         self.plot_bar_chart(summary)
         wandb.finish()
         print("finished extracting convergence")
@@ -334,11 +358,10 @@ class Metrics():
         energy_consumption = pd.DataFrame({
             'Strategy': pivot_table.columns,
             'Area': energy_list,
-            'Std Dev': std_devs
+            'StdDev': std_devs
         })
         self.plot_energy_consumption(energy_consumption, division_fac)
         return energy_consumption
-
 
     def plot_energy_consumption(self, bar_data, division_fac, additional_desc=''):
         # Sort bar_data in descending order based on 'Area'
@@ -347,12 +370,9 @@ class Metrics():
         # Plotting
         plt.figure(figsize=(10, 6))
 
-        # Bar plot for energy_list and standard deviations
-        bars = plt.bar(bar_data['Strategy'], bar_data['Area'], capsize=5)
+        # Bar plot for energy_list with standard deviations
+        bars = plt.bar(bar_data['Strategy'], bar_data['Area'], yerr=bar_data['StdDev'], capsize=5)  # Added 'yerr' for standard deviation
 
-        # Bar plot for energy_list and standard deviations
-        plt.bar(bar_data['Strategy'], bar_data['Area'], capsize=5)
-        
         unit = {1: "J", 1e3: "kJ", 1e6: "MJ", 1e9: "GJ"}
         # Adding labels and title
         plt.xlabel('Strategy')
@@ -377,7 +397,6 @@ class Metrics():
                         ha='center', va='bottom') # Text alignment
 
         plt.tight_layout()
-        
         
         path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-").replace(" ", "_"))
         plt.savefig(path_to_plot)
@@ -418,13 +437,14 @@ class Metrics_across_all_benchmarks(Metrics):
         if print_plot:
             print(summary)
 
-    def bar_plot_total_mean(self, total_mean, total_std, columns, description):
-        description = "Mean " + description 
+    def bar_plot_total_mean(self, df_metrics):
+        df_metrics = df_metrics.sort_values(by='mean', ascending=False)
+        description = "Mean " + df_metrics['description'].iloc[0]
         
         # Plot bar chart for total mean and standard deviation
         plt.figure(figsize=(10, 5))
-        bars = plt.bar(columns, total_mean, yerr=total_std, capsize=7, color='skyblue', edgecolor='black')
-        for bar, value in zip(bars, total_mean):
+        bars = plt.bar(df_metrics['bars'], df_metrics['mean'], yerr=df_metrics['std'], capsize=7, color='skyblue', edgecolor='black')
+        for bar, value in zip(bars, df_metrics['mean']):
             plt.annotate(f'{value:.2f}', xy=(bar.get_x() + bar.get_width() / 3, value),
                         xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
         plt.xlabel('Strategy')
@@ -435,16 +455,26 @@ class Metrics_across_all_benchmarks(Metrics):
         plt.savefig(path_to_plot)
         plt.close()
 
-    def bar_plot_runtime(self, runtimes):
+    def bar_plot_runtime(self, runtimes_stats):
         description = "Runtime for different strategies across all benchmarks"
         plt.figure(figsize=(10, 5))
-        # Create an array with the positions of each bar along the x-axis
-        plt.bar(runtimes.index, runtimes, color='orange', edgecolor='black', label='Runtime Mean (h)')
+        runtimes_stats = runtimes_stats.sort_values(by='mean_runtime', ascending=False)
+        bars = plt.bar(runtimes_stats.index, runtimes_stats['mean_runtime'], 
+                yerr=runtimes_stats['std_runtime'], capsize=5)
         plt.xlabel('Strategy')
-        plt.ylabel(description)
+        plt.ylabel('Runtime (s)')
         plt.title(f"{description} for different strategies")
-        plt.legend()  # Add a legend
-        plot_name =  description + ".png"
+
+        # Annotate numerical values on top of each bar
+        for bar in bars:
+            height = bar.get_height()
+            plt.annotate(f'{height:.2f}',
+                        xy=(bar.get_x() + bar.get_width() / 2, height),
+                        xytext=(0, 3),  # 3 points vertical offset
+                        textcoords="offset points",
+                        ha='center', va='bottom')
+
+        plot_name = description + ".png"
         path_to_plot = os.path.join(self.metrics_path, plot_name.replace("/", "-").replace(":", "-").replace(" ", "_"))
         plt.savefig(path_to_plot)
         plt.close()
@@ -465,16 +495,34 @@ class Metrics_across_all_benchmarks(Metrics):
         self.plot_bar_chart(df)
 
     def extract_system_metrics(self):
+        # Calculate mean and standard deviation for system metrics
         total_mean = self.df_system_metrics.groupby("index").mean()
-        total_std = self.df_system_metrics_std.groupby("index").mean()
-        bars = total_mean.index
-        for (_, mean), (_, std) in zip(total_mean.items(), total_std.items()):
-            description = mean.name + " across different benchmarks"
-            self.bar_plot_total_mean(mean, std, bars, description)
-        # TODO Implement standard deviation
-        runtimes = self.df_runtime.groupby("strategy_name").mean()
-        runtimes = runtimes.squeeze()
-        self.bar_plot_runtime(runtimes)
+        total_std = self.df_system_metrics.groupby("index").std()
+
+        # Iterate over each metric in the system metrics DataFrame
+        for metric in total_mean.columns:
+            mean_series = total_mean[metric]
+            std_series = total_std[metric]
+            description = f"{metric} across different benchmarks"
+
+            # Create a DataFrame for each metric with its mean, std, and description
+            df_metrics = pd.DataFrame({
+                'bars': mean_series.index,
+                'mean': mean_series.values,
+                'std': std_series.values,
+                'description': [description] * len(mean_series)
+            })
+
+            # Call the plotting function for each metric
+            self.bar_plot_total_mean(df_metrics)
+
+        # Calculate mean and standard deviation for runtime metrics
+        runtimes_stats = pd.DataFrame()
+        runtimes_stats['mean_runtime'] = self.df_runtime.groupby("strategy_name").mean()['runtime']
+        runtimes_stats['std_runtime'] = self.df_runtime.groupby("strategy_name").std()['runtime']
+
+        # Pass the DataFrame with mean and std runtime to the plotting function
+        self.bar_plot_runtime(runtimes_stats)
 
     def extract_energy_consumption(self):
         energy_consumption= self.df_energy_consumption.groupby("Strategy").mean().reset_index()
@@ -490,6 +538,7 @@ if __name__ == "__main__":
     interpolation_limit_energy_consumption = 10
     for group_name in group_names:
         metrics = Metrics(config, group_name)
+        df = metrics.get_accuracies()
         df = metrics.extract_convergence()
         metrics_aab.concat_convergence(df)
         total_mean, total_std, runtime = metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
