@@ -76,8 +76,8 @@ class Metrics():
             data = data.groupby("strategy_name").tail(1)
             df = pd.concat([df, data], ignore_index=True)
         stats_df = df.groupby('strategy_name')['test_accuracy'].agg(['mean', 'std']).reset_index()
-        stats_df.columns = ['Strategy', 'Mean Accuracy', 'Std Deviation']
-        stats_df = stats_df.sort_values('Mean Accuracy', ascending=False).round(2)
+        stats_df.columns = ['strategy', 'mean', 'std']
+        stats_df = stats_df.sort_values('mean', ascending=False).round(2)
         return stats_df
     
     def calculate_convergence(self, df):
@@ -309,7 +309,7 @@ class Metrics():
             df_total_std = pd.concat([df_total_std, total_std], axis=1)
             # Runtime shouldnt be concatenated, because it is the same each iteration above
             # Therefore the last runtime can be returned and it is OK
-        df_runtime = runtime
+        df_runtime = runtime.to_frame().rename(columns={0: "runtime"})
         return df_total_mean, df_total_std, df_runtime
 
     def extract_energy_consumption(self, interpolation_limit_energy_consumption):
@@ -407,6 +407,7 @@ class Metrics():
 
 class Metrics_across_all_benchmarks(Metrics):
     def __init__(self, config):
+        self.df_accuracies = pd.DataFrame()
         self.df_convergence = pd.DataFrame()
         self.df_system_metrics = pd.DataFrame()
         self.df_system_metrics_std = pd.DataFrame()
@@ -415,11 +416,11 @@ class Metrics_across_all_benchmarks(Metrics):
         folder_name = config.get("wandb_metrics_extraction").get("folder_name")
         self.metrics_path = self.create_folder(os.path.join(folder_name, "across_all_benchmarks"))
 
-    def plot_bar_chart(self, summary, print_plot=False):
+    def plot_bar_chart(self, summary, desc, print_plot=False):
         plt.figure(figsize=(10, 5)) 
         bars = plt.bar(summary['strategy'], summary['mean'], yerr=summary['std'], capsize=7, color='skyblue', edgecolor='black')
         # Adding titles and labels
-        plt.title(f'Mean and Standard Deviation of number of epochs to convergence across all benchmarks')
+        plt.title(f'{desc} across all benchmarks for different strategies')
         plt.xlabel('Strategy')
         plt.ylabel('Number of epochs')
 
@@ -429,7 +430,8 @@ class Metrics_across_all_benchmarks(Metrics):
                         xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
 
         date = datetime.now().strftime("%Y%m%d")
-        save_path = os.path.join(self.metrics_path, f'convergence_across_all_benchmarks{date}.png')
+        desc = desc.replace(" ", "_")
+        save_path = os.path.join(self.metrics_path, f'{desc}_across_all_benchmarks{date}.png')
         plt.savefig(save_path)
         plt.close()
 
@@ -479,6 +481,9 @@ class Metrics_across_all_benchmarks(Metrics):
         plt.savefig(path_to_plot)
         plt.close()
 
+    def concat_accuracies(self, df):
+        self.df_accuracies = pd.concat([self.df_accuracies, df], ignore_index=True)
+
     def concat_convergence(self, df):
         self.df_convergence = pd.concat([self.df_convergence, df.reset_index()], ignore_index=True)
     
@@ -492,7 +497,13 @@ class Metrics_across_all_benchmarks(Metrics):
     
     def extract_convergence(self):
         df = self.df_convergence.groupby("strategy").mean().reset_index()
-        self.plot_bar_chart(df)
+        df = df.sort_values('mean', ascending=False).round(2)
+        self.plot_bar_chart(df, 'Mean number of epochs to convergence')
+
+    def extract_accuracies(self):
+        df = self.df_accuracies.groupby('strategy').mean().reset_index()
+        df = df.sort_values('mean', ascending=False).round(2)
+        self.plot_bar_chart(df, 'Mean accuracy')
 
     def extract_system_metrics(self):
         # Calculate mean and standard deviation for system metrics
@@ -503,7 +514,7 @@ class Metrics_across_all_benchmarks(Metrics):
         for metric in total_mean.columns:
             mean_series = total_mean[metric]
             std_series = total_std[metric]
-            description = f"{metric} across different benchmarks"
+            description = f"{metric} across all benchmarks"
 
             # Create a DataFrame for each metric with its mean, std, and description
             df_metrics = pd.DataFrame({
@@ -526,7 +537,7 @@ class Metrics_across_all_benchmarks(Metrics):
 
     def extract_energy_consumption(self):
         energy_consumption= self.df_energy_consumption.groupby("Strategy").mean().reset_index()
-        self.plot_energy_consumption(energy_consumption, 1e6, " across different benchmarks")
+        self.plot_energy_consumption(energy_consumption, 1e6, " across all benchmarks")
 
 if __name__ == "__main__":
     main_path = os.path.dirname(os.path.abspath(__file__))
@@ -539,6 +550,7 @@ if __name__ == "__main__":
     for group_name in group_names:
         metrics = Metrics(config, group_name)
         df = metrics.get_accuracies()
+        metrics_aab.concat_accuracies(df)
         df = metrics.extract_convergence()
         metrics_aab.concat_convergence(df)
         total_mean, total_std, runtime = metrics.extract_system_metrics_all(interpolation_limit_system_metrics)
@@ -547,6 +559,7 @@ if __name__ == "__main__":
         metrics_aab.concat_energy_consumption(df)
         df = metrics
         wandb.finish()
+    metrics_aab.extract_accuracies()
     metrics_aab.extract_convergence()
     metrics_aab.extract_system_metrics()
     metrics_aab.extract_energy_consumption()
